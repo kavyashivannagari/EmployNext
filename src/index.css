@@ -1,5 +1,5 @@
-@tailwind base;
-@tailwind components;
+/* @tailwind base;
+@tailwind components; */
 @tailwind utilities;
 
 @import "tailwindcss";
@@ -114,14 +114,14 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 }
-/* @layer utilities{
-  .gradient{
+@layer utilities{
+  /* .gradient{
     @apply bg-gradient-to-br from-gray-500 via-gray-200 to-white
-  }
-  .gradient-title{
+  } */
+  /* .gradient-title{
     @apply gradient text-transparent bg-clip-text
-  }
-} */
+  } */
+}
 @layer base {
   * {
     @apply border-border outline-ring/50;

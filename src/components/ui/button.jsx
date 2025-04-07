@@ -20,12 +20,13 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
+        glow: "bg-gradient-to-r from-pink-500 to-violet-500 text-white shadow-lg hover:shadow-xl hover:opacity-90 transition-all duration-300",
+
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
         sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
         lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        xl:"h-14 sm:h-16 rounded-md px-14 text-lg sm:text-xl font-bold",
         icon: "size-9",
       },
     },
@@ -33,6 +34,13 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
+size: {
+  default: "h-10 py-2 px-4",
+  sm: "h-9 px-3 rounded-md",
+  lg: "h-11 px-8 rounded-md",
+  xl: "h-14 px-10 text-lg rounded-lg", // custom extra large size
+  icon: "h-10 w-10", // square icon button
+}
   }
 )
 
@@ -54,3 +62,5 @@ function Button({
 }
 
 export { Button, buttonVariants }
+
+

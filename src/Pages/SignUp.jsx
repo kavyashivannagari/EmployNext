@@ -1,116 +1,143 @@
-import { Form, Button, Container, Row, Col, Card, Alert } from "react-bootstrap";
-import { useState } from "react";
-import { auth, db } from "../firebaseConfig";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
-import { set, ref } from "firebase/database";
-import "../App.css"
-const SignUp = () => {
-    const navigate = useNavigate();
-    const [signupDetails, setSignupDetails] = useState({
-        name: "",
-        email: "",
-        password: ""
-    });
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
-    
-    const handleSignUpDetails = (e) => {
-        setSignupDetails({ ...signupDetails, [e.target.name]: e.target.value });
-    };
-    
-    const handleSignUpSubmit = async (e) => {
-        e.preventDefault();
-        setError("");
-        setLoading(true);
-        
-        const { name, email, password } = signupDetails; 
-        
-        try {
-            const signUpUser = await createUserWithEmailAndPassword(auth, email, password);
-            
-            await set(ref(db, "users/" + name), {
-                name: name,
-                email: email,
-                id: signUpUser.user.uid,
-            });
-            
-            navigate("/login");
-        } catch (err) {
-            console.log(err);
-            setError("Failed to create account. Please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
-    
-    return (
-        <div className="signup-container">
-            <Container>
-                <Row className="justify-content-center">
-                    <Col md={6} lg={5}>
-                        <Card className="signup-card">
-                            <div className="signup-form-container">
-                                <h2 className="signup-header">Create an Account</h2>
-                                
-                                {error && <Alert variant="danger">{error}</Alert>}
-                                
-                                <Form onSubmit={handleSignUpSubmit}>
-                                    <Form.Group className="form-group">
-                                        <Form.Label>Name</Form.Label>
-                                        <Form.Control 
-                                            type="text" 
-                                            name="name" 
-                                            placeholder="Enter your name"
-                                            onChange={handleSignUpDetails} 
-                                            required
-                                        />
-                                    </Form.Group>
-                                    
-                                    
-                                    <Form.Group className="form-group">
-                                        <Form.Label>Email</Form.Label>
-                                        <Form.Control 
-                                            type="email" 
-                                            name="email" 
-                                            placeholder="Enter your email"
-                                            onChange={handleSignUpDetails} 
-                                            required
-                                        />
-                                    </Form.Group>
-                                    
-                                    <Form.Group className="form-group">
-                                        <Form.Label>Password</Form.Label>
-                                        <Form.Control 
-                                            type="password" 
-                                            name="password" 
-                                            placeholder="Create a password"
-                                            onChange={handleSignUpDetails} 
-                                            required
-                                        />
-                                    </Form.Group>
-                                    
-                                    <Button 
-                                        className="signup-button"
-                                        type="submit" 
-                                        disabled={loading}
-                                    >
-                                        {loading ? "Creating Account..." : "Sign Up"}
-                                    </Button>
-                                </Form>
-                                
-                                <div className="signup-links">
-                                    <p>
-                                        Already have an account? <a href="/login">Login</a>
-                                    </p>
-                                </div>
-                            </div>
-                        </Card>
-                    </Col>
-                </Row>
-            </Container>
+import React, { useState } from "react";
+import { useNavigate,Link } from "react-router-dom";
+import { registerWithEmailAndPasswordWithRole } from "../lib/firebase";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import { Loader2 } from "lucide-react";
+
+const Signup = () => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState("candidate");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    console.log("Starting signup process");
+  
+    try {
+      console.log("Calling registration function with:", { name, email, role });
+      await registerWithEmailAndPasswordWithRole(name, email, password, role);
+      console.log("Registration successful, navigating to login");
+      // navigate("/login");
+      setTimeout(() => navigate("/login"), 0); 
+    } catch (error) {
+      console.error("Registration error:", error);
+      setError(error.message.replace("Firebase: ", ""));
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <main className="flex-grow flex items-center justify-center py-12 px-4">
+        <div className="w-full max-w-md p-8 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+          <h1 className="text-2xl font-bold text-center mb-6">Create an Account</h1>
+
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4" role="alert">
+              <span className="block sm:inline">{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSignup}>
+            <div className="mb-4">
+              <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" htmlFor="name">
+                Full Name
+              </label>
+              <input
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                id="name"
+                type="text"
+                placeholder="John Doe"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" htmlFor="email">
+                Email
+              </label>
+              <input
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                id="email"
+                type="email"
+                placeholder="john@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" htmlFor="password">
+                Password
+              </label>
+              <input
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2" htmlFor="role">
+                Role
+              </label>
+              <select
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
+                id="role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                required
+              >
+                <option value="candidate">Candidate</option>
+                <option value="recruiter">Recruiter</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between mb-6">
+              <button
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full"
+                type="submit"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing up...
+                  </>
+                ) : (
+                  "Sign Up"
+                )}
+              </button>
+            </div>
+
+            <div className="text-center">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Already have an account?{' '}
+                <Link to="/login" className="text-blue-500 hover:text-blue-600">
+                  Log In
+                </Link>
+              </p>
+            </div>
+          </form>
         </div>
-    );
+      </main>
+      <Footer />
+    </div>
+  );
 };
 
-export default SignUp;
+export default Signup;
