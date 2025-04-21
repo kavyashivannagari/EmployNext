@@ -88,7 +88,8 @@ const JobPage = () => {
       console.error('Error updating saved jobs:', err);
     }
   };
-
+console.log(isApplied)
+console.log(isApplying)
   const handleApply = async () => {
     if (!user) {
       return <Navigate to="/login" state={{ from: `/jobs/${id}` }} />;
@@ -150,10 +151,10 @@ const JobPage = () => {
                   <MapPin className="h-4 w-4" />
                   {job.location}
                 </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1">
+                {/* <Badge variant="secondary" className="flex items-center gap-1">
                   <DollarSign className="h-4 w-4" />
                   {job.salary}
-                </Badge>
+                </Badge> */}
               </div>
             </div>
             
@@ -218,7 +219,7 @@ const JobPage = () => {
               Posted on {new Date(job.postedDate?.toDate()).toLocaleDateString()}
             </div>
             
-            <Button 
+            {/* <Button 
               onClick={handleApply}
               disabled={isApplying || isApplied}
               className={`flex items-center gap-2 ${
@@ -227,7 +228,7 @@ const JobPage = () => {
             >
               <Briefcase className="h-4 w-4" />
               {isApplied ? 'Applied' : isApplying ? 'Applying...' : 'Apply Now'}
-            </Button>
+            </Button> */}
           </div>
         </CardFooter>
       </Card>

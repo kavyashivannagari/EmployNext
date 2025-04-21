@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate,Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { registerWithEmailAndPasswordWithRole } from "../lib/firebase";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -19,13 +19,13 @@ const Signup = () => {
     setError("");
     setLoading(true);
     console.log("Starting signup process");
-  
+
     try {
       console.log("Calling registration function with:", { name, email, role });
       await registerWithEmailAndPasswordWithRole(name, email, password, role);
       console.log("Registration successful, navigating to login");
       // navigate("/login");
-      setTimeout(() => navigate("/login"), 0); 
+      setTimeout(() => navigate("/login"), 0);
     } catch (error) {
       console.error("Registration error:", error);
       setError(error.message.replace("Firebase: ", ""));
@@ -55,7 +55,7 @@ const Signup = () => {
                 className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
                 id="name"
                 type="text"
-                placeholder="John Doe"
+                placeholder="Enter Fullname"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -70,7 +70,7 @@ const Signup = () => {
                 className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500"
                 id="email"
                 type="email"
-                placeholder="john@example.com"
+                placeholder="Enter Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -103,11 +103,13 @@ const Signup = () => {
                 onChange={(e) => setRole(e.target.value)}
                 required
               >
-                <option >I am a..</option>
-
+                <option value="" style={{display:"none"}}>
+                  Select Role
+                </option>
                 <option value="candidate">Candidate</option>
                 <option value="recruiter">Recruiter</option>
               </select>
+
             </div>
 
             <div className="flex items-center justify-between mb-6">

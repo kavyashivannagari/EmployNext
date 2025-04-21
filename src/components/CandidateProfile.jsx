@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, getUserProfile, updateUserProfileSaving, uploadResume } from '../lib/firebase';
+import { auth, getUserProfile, updateUserProfileSaving } from '../lib/firebase';
 import Header from './Header';
 import Footer from './Footer';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { UploadCloud } from 'lucide-react';
 
 const CandidateProfile = () => {
   const navigate = useNavigate();
@@ -24,14 +23,6 @@ const CandidateProfile = () => {
   const [education, setEducation] = useState('');
   const [bio, setBio] = useState('');
   const [experience, setExperience] = useState('');
-  
-  // Resume upload
-  const [resumeFile, setResumeFile] = useState(null);
-  const [resumeName, setResumeName] = useState('');
-  const [resumeUrl, setResumeUrl] = useState('');
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isDragActive, setIsDragActive] = useState(false);
   
   // Status
   const [loading, setLoading] = useState(true);
@@ -58,8 +49,6 @@ const CandidateProfile = () => {
           setEducation(profile.education || '');
           setBio(profile.bio || '');
           setExperience(profile.experience || '');
-          setResumeName(profile.resumeName || '');
-          setResumeUrl(profile.resumeUrl || '');
         }
       } catch (error) {
         console.error('Error loading profile:', error);
@@ -71,101 +60,6 @@ const CandidateProfile = () => {
 
     loadUserProfile();
   }, [navigate]);
-
-  const validateAndSetFile = (file) => {
-    // Validate file type
-    const validTypes = ['application/pdf', 'application/msword', 
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    const validExtensions = ['.pdf', '.doc', '.docx'];
-    const fileName = file.name.toLowerCase();
-    
-    const isTypeValid = validTypes.includes(file.type) || 
-      validExtensions.some(ext => fileName.endsWith(ext));
-    
-    if (!isTypeValid) {
-      setError('Invalid file type. Please upload a PDF, DOC, or DOCX file.');
-      return false;
-    }
-    
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('File size too large. Maximum size is 5MB.');
-      return false;
-    }
-    
-    setResumeFile(file);
-    setResumeName(file.name);
-    setError(null);
-    return true;
-  };
-
-  const handleResumeChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      validateAndSetFile(file);
-    }
-  };
-
-  const handleDragEnter = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragActive(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragActive(false);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragActive(true);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      validateAndSetFile(file);
-    }
-  };
-
-  const handleResumeUpload = async () => {
-    if (!resumeFile) {
-      setError('Please select a file first');
-      return;
-    }
-    
-    try {
-      setIsUploading(true);
-      setError(null);
-      const user = auth.currentUser;
-      
-      if (!user) {
-        setError('You must be logged in to upload a resume');
-        return;
-      }
-      
-      const url = await uploadResume(user.uid, resumeFile, (progress) => {
-        setUploadProgress(Math.round(progress));
-      });
-      
-      setResumeUrl(url);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (error) {
-      console.error('Error uploading resume:', error);
-      setError(`Failed to upload resume: ${error.message}`);
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -186,9 +80,7 @@ const CandidateProfile = () => {
         skills,
         education,
         bio,
-        experience,
-        resumeName: resumeName || '',
-        resumeUrl: resumeUrl || ''
+        experience
       };
 
       await updateUserProfileSaving(user.uid, profileData);
@@ -331,83 +223,6 @@ const CandidateProfile = () => {
               </CardContent>
             </Card>
             
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Resume</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {resumeUrl ? (
-                    <div className="p-4 border border-green-200 rounded-lg bg-green-50 dark:bg-green-900/20 dark:border-green-800">
-                      <p className="font-medium text-green-800 dark:text-green-300">Resume Uploaded</p>
-                      <div className="flex items-center mt-2">
-                        <span className="text-sm text-green-700 dark:text-green-400">{resumeName}</span>
-                        <a 
-                          href={resumeUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="ml-4 text-sm text-blue-600 hover:underline"
-                        >
-                          View
-                        </a>
-                      </div>
-                    </div>
-                  ) : null}
-                  
-                  <div 
-                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                      isDragActive 
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                        : 'border-gray-300 dark:border-gray-700'
-                    }`}
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                  >
-                    <UploadCloud className={`mx-auto h-12 w-12 ${
-                      isDragActive ? 'text-blue-500' : 'text-gray-400'
-                    }`} />
-                    <div className="mt-4">
-                      <Label htmlFor="resume" className="cursor-pointer">
-                        <span className="text-blue-600 font-medium">Click to upload</span> or drag and drop
-                      </Label>
-                      <Input 
-                        id="resume"
-                        type="file" 
-                        accept=".pdf,.doc,.docx"
-                        className="hidden"
-                        onChange={handleResumeChange}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">PDF, DOC or DOCX (max. 5MB)</p>
-                    </div>
-                    
-                    {resumeFile && !resumeUrl && (
-                      <div className="mt-4">
-                        <p className="text-sm">{resumeFile.name}</p>
-                        <Button 
-                          onClick={handleResumeUpload}
-                          disabled={isUploading}
-                          type="button"
-                          className="mt-2 w-full"
-                        >
-                          {isUploading ? `Uploading (${uploadProgress}%)` : 'Upload Resume'}
-                        </Button>
-                        {uploadProgress > 0 && (
-                          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
-                            <div 
-                              className="bg-blue-600 h-2.5 rounded-full" 
-                              style={{ width: `${uploadProgress}%` }}
-                            ></div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
             <div className="flex justify-end gap-4">
               <Button 
                 type="button" 
@@ -416,7 +231,7 @@ const CandidateProfile = () => {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={saving || isUploading}>
+              <Button type="submit" disabled={saving}>
                 {saving ? 'Saving...' : 'Save Profile'}
               </Button>
             </div>

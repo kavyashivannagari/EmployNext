@@ -1,12 +1,13 @@
-// src/Pages/CandidateDashboard.jsx
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { auth, getUserProfile, getUserApplications } from '../lib/firebase';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, GraduationCap } from 'lucide-react'; // Import icons
+import { Button } from '@/components/ui/button';
+import { FileText, GraduationCap } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 const ApplicationItem = ({ application }) => {
   const job = application.job;
@@ -40,7 +41,6 @@ const ApplicationItem = ({ application }) => {
   );
 };
 
-// Map education values to display labels
 const educationLabels = {
   'highschool': 'High School',
   'associates': 'Associate\'s Degree',
@@ -50,38 +50,72 @@ const educationLabels = {
   'other': 'Other'
 };
 
+// Function to check if profile is incomplete
+const isProfileIncomplete = (profile) => {
+  if (!profile) return true;
+  return (
+    !profile.fullName ||
+    !profile.title ||
+    !profile.location ||
+    !profile.skills ||
+    !profile.education
+  );
+};
+
 const CandidateDashboard = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadUserData = async () => {
       try {
         const user = auth.currentUser;
         if (!user) {
-          setError("No authenticated user found");
-          setLoading(false);
+          navigate('/login');
           return;
         }
 
-        const profileData = await getUserProfile(user.uid);
-        console.log("Loaded profile data:", profileData); // For debugging
-        setUserProfile(profileData);
-
-        const applicationsData = await getUserApplications(user.uid);
-        setApplications(applicationsData);
+        const [profileData, applicationsData] = await Promise.all([
+          getUserProfile(user.uid),
+          getUserApplications(user.uid)
+        ]);
+        
+        setUserProfile(profileData || {});
+        setApplications(applicationsData || []);
+        setLoading(false);
+        
+        // After loading data, check if profile is incomplete and show alert
+        if (isProfileIncomplete(profileData)) {
+          setTimeout(() => {
+            Swal.fire({
+              title: 'Update Your Profile',
+              text: 'Please complete your profile to improve your job search experience',
+              icon: 'info',
+              confirmButtonText: 'Update Now',
+              showCancelButton: true,
+              cancelButtonText: 'Later',
+              allowOutsideClick: false
+            }).then((result) => {
+              if (result.isConfirmed) {
+                navigate('/candidate-profile');
+              }
+            });
+          }, 500); // Small delay to ensure UI renders first
+        }
       } catch (error) {
         console.error('Error loading user data:', error);
-        setError(error.message);
-      } finally {
+        setError(error.message.includes('permission') 
+          ? "You don't have permission to access this data. Please contact support."
+          : "Failed to load data. Please try again later.");
         setLoading(false);
       }
     };
 
     loadUserData();
-  }, []);
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -93,14 +127,30 @@ const CandidateDashboard = () => {
 
   if (error) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-600 p-4 rounded-md">
-          <h2 className="text-lg font-semibold text-red-800 dark:text-red-300">Error</h2>
-          <p className="text-red-700 dark:text-red-300">{error}</p>
-          <Link to="/login" className="mt-4 inline-block text-blue-600 hover:underline">
-            Back to Login
-          </Link>
+      <div className="min-h-screen flex flex-col">
+        <Header user={auth.currentUser} userRole="candidate" />
+        <div className="flex-grow flex justify-center items-center">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-600 p-6 rounded-md max-w-md mx-4">
+            <h2 className="text-lg font-semibold text-red-800 dark:text-red-300">Error</h2>
+            <p className="text-red-700 dark:text-red-300 mt-2">{error}</p>
+            <div className="mt-4 flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => window.location.reload()}
+                className="w-full"
+              >
+                Try Again
+              </Button>
+              <Button 
+                onClick={() => navigate('/login')}
+                className="w-full"
+              >
+                Back to Login
+              </Button>
+            </div>
+          </div>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -146,7 +196,6 @@ const CandidateDashboard = () => {
                       </div>
                     </div>
                     
-                    {/* Education Section */}
                     <div>
                       <h3 className="text-sm font-semibold text-gray-500">Education</h3>
                       <div className="flex items-center mt-1">
@@ -160,13 +209,11 @@ const CandidateDashboard = () => {
                       <p className="text-sm">{userProfile?.bio || 'No bio provided'}</p>
                     </div>
 
-                    {/* Experience Section */}
                     <div>
                       <h3 className="text-sm font-semibold text-gray-500">Experience</h3>
                       <p className="text-sm">{userProfile?.experience || 'No experience listed'}</p>
                     </div>
 
-                    {/* Resume Section */}
                     {userProfile?.resumeUrl && (
                       <div>
                         <h3 className="text-sm font-semibold text-gray-500">Resume</h3>

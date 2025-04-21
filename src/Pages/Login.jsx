@@ -1,8 +1,7 @@
-// src/Pages/Login.jsx
 import { useState } from 'react';
-import { Link,useNavigate} from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, getUserRole } from '../lib/firebase';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 
@@ -14,15 +13,23 @@ const LoginPage = () => {
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate("/login");
-      // The onAuthStateChanged listener in App.js will handle the redirect
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      // Get user role from Firestore
+      const role = await getUserRole(user.uid);
+      
+      // Navigate based on user role
+      if (role === 'recruiter') {
+        navigate('/recruiter-dashboard');
+      } else {
+        navigate('/candidate-dashboard');
+      }
     } catch (error) {
       console.error("Login error:", error);
       setError(error.message.replace('Firebase: ', ''));
