@@ -209,7 +209,7 @@ const RecruiterDashboard = () => {
                       <p className="text-gray-500">You haven't posted any jobs yet.</p>
                       <button 
                         onClick={openPostJobModal}
-                        className="text-blue-600 hover:underline mt-2 inline-block"
+                        className="text-blue-600 hover:underlineir mt-2 inline-block"
                       >
                         Post Your First Job
                       </button>

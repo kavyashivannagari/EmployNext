@@ -1,4 +1,3 @@
-// pages/JobListing.jsx
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
@@ -28,14 +27,13 @@ const JobListing = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [savedJobIds, setSavedJobIds] = useState({});
-  const [user, setUser] = useState(auth.currentUser);
+  const [user, setUser] = useState(null);
   const [appliedJobIds, setAppliedJobIds] = useState({});
   const [applicationIds, setApplicationIds] = useState({});
   const [alert, setAlert] = useState(null);
   const [applyModalOpen, setApplyModalOpen] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,9 +42,9 @@ const JobListing = () => {
         const jobsData = await getJobs();
         setJobs(jobsData);
         
-        if (auth.currentUser) {
+        if (user) {
           const savedStatuses = {};
-          const applications = await getUserApplications(auth.currentUser.uid);
+          const applications = await getUserApplications(user.uid);
           const appliedStatuses = {};
           const appIds = {};
           
@@ -56,7 +54,7 @@ const JobListing = () => {
           });
           
           for (const job of jobsData) {
-            const isSaved = await isJobSaved(auth.currentUser.uid, job.id);
+            const isSaved = await isJobSaved(user.uid, job.id);
             savedStatuses[job.id] = isSaved;
           }
           
@@ -73,22 +71,27 @@ const JobListing = () => {
     };
 
     fetchJobs();
-    
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setUser(user);
+  }, [user]);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      setUser(currentUser);
     });
-    
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
     const loadProfile = async () => {
       if (applyModalOpen && user) {
-        const profileData = await getUserProfile(user.uid);
-        setProfile(profileData);
+        try {
+          const profileData = await getUserProfile(user.uid);
+          setProfile(profileData || {});
+        } catch (err) {
+          console.error("Error loading profile:", err);
+          setError("Failed to load profile data");
+        }
       }
     };
-    
     loadProfile();
   }, [applyModalOpen, user]);
 
@@ -101,14 +104,20 @@ const JobListing = () => {
     try {
       if (savedJobIds[jobId]) {
         await unsaveJob(user.uid, jobId);
-        setSavedJobIds({...savedJobIds, [jobId]: false});
+        setSavedJobIds({ ...savedJobIds, [jobId]: false });
+        setAlert({ type: 'success', message: 'Job removed from saved list' });
       } else {
         await saveJob(user.uid, jobId);
-        setSavedJobIds({...savedJobIds, [jobId]: true});
+        setSavedJobIds({ ...savedJobIds, [jobId]: true });
+        setAlert({ type: 'success', message: 'Job saved successfully' });
       }
     } catch (err) {
       console.error("Error saving/unsaving job:", err);
-      setAlert({ type: 'error', message: 'Failed to save job. Please try again.' });
+      if (err.code === 'permission-denied') {
+        setAlert({ type: 'error', message: 'You do not have permission to save jobs. Please contact support.' });
+      } else {
+        setAlert({ type: 'error', message: 'Failed to save job. Please try again.' });
+      }
     }
   };
 
@@ -126,11 +135,9 @@ const JobListing = () => {
       let resumeUrl = profile?.resumeUrl;
       
       if (resumeFile) {
-        resumeUrl = await uploadResume(
-          user.uid, 
-          resumeFile,
-          (progress) => setUploadProgress(progress)
-        );
+        console.log('Uploading file:', resumeFile.name, resumeFile.type);
+        resumeUrl = await uploadResume(user.uid, resumeFile);
+        console.log('Upload successful, URL:', resumeUrl);
       }
       
       if (!resumeUrl) {
@@ -138,28 +145,51 @@ const JobListing = () => {
       }
       
       const applicationId = await applyToJob(user.uid, selectedJobId, { resumeUrl });
-      setAppliedJobIds({...appliedJobIds, [selectedJobId]: true});
-      setApplicationIds({...applicationIds, [selectedJobId]: applicationId});
+      setAppliedJobIds({ ...appliedJobIds, [selectedJobId]: true });
+      setApplicationIds({ ...applicationIds, [selectedJobId]: applicationId });
       setAlert({ type: 'success', message: 'Application submitted successfully!' });
+      setApplyModalOpen(false);
+
+      // Update jobs list to reflect the new application count
+      setJobs(jobs.map(job => 
+        job.id === selectedJobId 
+          ? { ...job, applicationCount: (job.applicationCount || 0) + 1 }
+          : job
+      ));
     } catch (err) {
       console.error("Error applying to job:", err);
-      throw err;
-    } finally {
-      setUploadProgress(0);
+      setAlert({ 
+        type: 'error', 
+        message: err.message || 'Failed to submit application. Please check your resume upload or permissions.'
+      });
     }
   };
 
   const handleCancelApplication = async (jobId) => {
     try {
       const applicationId = applicationIds[jobId];
-      if (!applicationId) return;
+      if (!applicationId) {
+        setAlert({ type: 'warning', message: 'No application found to cancel.' });
+        return;
+      }
       
       await cancelApplication(applicationId);
-      setAppliedJobIds({...appliedJobIds, [jobId]: false});
+      setAppliedJobIds({ ...appliedJobIds, [jobId]: false });
+      setApplicationIds({ ...applicationIds, [jobId]: null });
       setAlert({ type: 'success', message: 'Application cancelled successfully!' });
+
+      // Update jobs list to reflect the reduced application count
+      setJobs(jobs.map(job => 
+        job.id === jobId 
+          ? { ...job, applicationCount: Math.max((job.applicationCount || 0) - 1, 0) }
+          : job
+      ));
     } catch (err) {
       console.error("Error cancelling application:", err);
-      setAlert({ type: 'error', message: 'Failed to cancel application. Please try again.' });
+      setAlert({ 
+        type: 'error', 
+        message: err.message || 'Failed to cancel application. Please try again.'
+      });
     }
   };
 
@@ -168,10 +198,11 @@ const JobListing = () => {
   };
 
   const filteredJobs = jobs.filter(job => {
+    const searchLower = searchTerm.toLowerCase();
     return (
-      job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.location?.toLowerCase().includes(searchTerm.toLowerCase())
+      job.title?.toLowerCase().includes(searchLower) ||
+      job.companyName?.toLowerCase().includes(searchLower) ||
+      job.location?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -201,7 +232,7 @@ const JobListing = () => {
       <main className="flex-grow py-6 px-4 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto">
           {alert && (
-            <Alert variant={alert.type === 'error' ? 'destructive' : 'default'} className="mb-4">
+            <Alert variant={alert.type === 'error' ? 'destructive' : alert.type === 'warning' ? 'warning' : 'default'} className="mb-4">
               <AlertDescription>{alert.message}</AlertDescription>
             </Alert>
           )}
@@ -241,6 +272,7 @@ const JobListing = () => {
                             <button 
                               onClick={() => handleSaveJob(job.id)}
                               className="ml-4 text-gray-500 hover:text-yellow-500"
+                              aria-label={savedJobIds[job.id] ? "Unsave job" : "Save job"}
                             >
                               {savedJobIds[job.id] ? (
                                 <BookmarkCheck className="h-5 w-5 text-yellow-500" />

@@ -2,8 +2,6 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { X, UploadCloud, FileText } from 'lucide-react';
 
@@ -16,6 +14,7 @@ const ApplyModal = ({
 }) => {
   const [resumeFile, setResumeFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState(null);
 
   const onDrop = useCallback((acceptedFiles) => {
@@ -44,6 +43,7 @@ const ApplyModal = ({
 
   const handleRemoveFile = () => {
     setResumeFile(null);
+    setUploadProgress(0);
   };
 
   const handleSubmit = async () => {
@@ -53,13 +53,16 @@ const ApplyModal = ({
     }
 
     setIsUploading(true);
+    setError(null);
+    
     try {
       await onApply(resumeFile);
       onClose();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to upload resume');
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -93,18 +96,29 @@ const ApplyModal = ({
             )}
             
             {resumeFile ? (
-              <div className="border rounded-md p-4 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-blue-500" />
-                  <span>{resumeFile.name}</span>
+              <div className="space-y-2">
+                <div className="border rounded-md p-4 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-blue-500" />
+                    <span>{resumeFile.name}</span>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={handleRemoveFile}
+                    disabled={isUploading}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={handleRemoveFile}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                {isUploading && (
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div 
+                      className="bg-blue-600 h-2.5 rounded-full" 
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                )}
               </div>
             ) : currentResumeUrl ? (
               <div className="border rounded-md p-4 flex justify-between items-center">
@@ -128,7 +142,7 @@ const ApplyModal = ({
                   isDragActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/10' : 'border-gray-300 dark:border-gray-600'
                 }`}
               >
-                <input {...getInputProps()}  type='file'/>
+                <input {...getInputProps()} />
                 <UploadCloud className="mx-auto h-10 w-10 text-gray-400 mb-2" />
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {isDragActive ? (
@@ -145,7 +159,7 @@ const ApplyModal = ({
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={isUploading}>
               Cancel
             </Button>
             <Button 

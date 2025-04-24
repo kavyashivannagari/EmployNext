@@ -1,4 +1,3 @@
-// pages/SavedJobs.jsx
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
@@ -13,7 +12,7 @@ import {
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Briefcase, MapPin, DollarSign, Clock, BookmarkX, X } from 'lucide-react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ApplyModal from '../components/ApplicationModal';
@@ -28,7 +27,6 @@ const SavedJobs = () => {
   const [applyModalOpen, setApplyModalOpen] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -48,8 +46,8 @@ const SavedJobs = () => {
         const appIds = {};
         jobs.forEach(job => {
           if (job.applicationId) {
-            appliedIds[job.id] = true;
-            appIds[job.id] = job.applicationId;
+            appliedIds[job.job.id] = true;
+            appIds[job.job.id] = job.applicationId;
           }
         });
         setAppliedJobIds(appliedIds);
@@ -68,8 +66,13 @@ const SavedJobs = () => {
   useEffect(() => {
     const loadProfile = async () => {
       if (applyModalOpen && auth.currentUser) {
-        const profileData = await getUserProfile(auth.currentUser.uid);
-        setProfile(profileData);
+        try {
+          const profileData = await getUserProfile(auth.currentUser.uid);
+          setProfile(profileData || {});
+        } catch (err) {
+          console.error("Error loading profile:", err);
+          setError("Failed to load profile data");
+        }
       }
     };
     
@@ -83,6 +86,7 @@ const SavedJobs = () => {
 
       await unsaveJob(user.uid, jobId);
       setSavedJobs(savedJobs.filter(job => job.id !== savedJobId));
+      setAlert({ type: 'success', message: 'Job removed from saved list successfully!' });
     } catch (err) {
       console.error("Error unsaving job:", err);
       setAlert({ type: 'error', message: 'Failed to remove job. Please try again.' });
@@ -103,11 +107,9 @@ const SavedJobs = () => {
       let resumeUrl = profile?.resumeUrl;
       
       if (resumeFile) {
-        resumeUrl = await uploadResume(
-          auth.currentUser.uid, 
-          resumeFile,
-          (progress) => setUploadProgress(progress)
-        );
+        console.log('Uploading file:', resumeFile.name, resumeFile.type);
+        resumeUrl = await uploadResume(auth.currentUser.uid, resumeFile);
+        console.log('Upload successful, URL:', resumeUrl);
       }
       
       if (!resumeUrl) {
@@ -115,38 +117,52 @@ const SavedJobs = () => {
       }
       
       const applicationId = await applyToJob(auth.currentUser.uid, selectedJobId, { resumeUrl });
-      setAppliedJobIds({...appliedJobIds, [selectedJobId]: true});
-      setApplicationIds({...applicationIds, [selectedJobId]: applicationId});
+      setAppliedJobIds({ ...appliedJobIds, [selectedJobId]: true });
+      setApplicationIds({ ...applicationIds, [selectedJobId]: applicationId });
       setAlert({ type: 'success', message: 'Application submitted successfully!' });
       
       // Update the saved jobs list to reflect the application
       setSavedJobs(savedJobs.map(job => 
-        job.id === selectedJobId ? { ...job, applicationId } : job
+        job.job.id === selectedJobId 
+          ? { ...job, applicationId, job: { ...job.job, applicationCount: (job.job.applicationCount || 0) + 1 } }
+          : job
       ));
     } catch (err) {
       console.error("Error applying to job:", err);
-      throw err;
+      setAlert({ 
+        type: 'error', 
+        message: err.message || 'Failed to apply. Please check your resume upload or permissions.'
+      });
     } finally {
-      setUploadProgress(0);
+      setApplyModalOpen(false);
     }
   };
-  console.log(uploadProgress)
+
   const handleCancelApplication = async (jobId) => {
     try {
       const applicationId = applicationIds[jobId];
-      if (!applicationId) return;
+      if (!applicationId) {
+        setAlert({ type: 'warning', message: 'No application found to cancel.' });
+        return;
+      }
       
       await cancelApplication(applicationId);
-      setAppliedJobIds({...appliedJobIds, [jobId]: false});
+      setAppliedJobIds({ ...appliedJobIds, [jobId]: false });
+      setApplicationIds({ ...applicationIds, [jobId]: null });
       setAlert({ type: 'success', message: 'Application cancelled successfully!' });
       
       // Update the saved jobs list to reflect the cancellation
       setSavedJobs(savedJobs.map(job => 
-        job.id === jobId ? { ...job, applicationId: null } : job
+        job.job.id === jobId 
+          ? { ...job, applicationId: null, job: { ...job.job, applicationCount: Math.max((job.job.applicationCount || 0) - 1, 0) } }
+          : job
       ));
     } catch (err) {
       console.error("Error cancelling application:", err);
-      setAlert({ type: 'error', message: 'Failed to cancel application. Please try again.' });
+      setAlert({ 
+        type: 'error', 
+        message: err.message || 'Failed to cancel application. Please try again.'
+      });
     }
   };
 

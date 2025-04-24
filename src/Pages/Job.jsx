@@ -110,6 +110,8 @@ console.log(isApplying)
       setIsApplying(false);
     }
   };
+  console.log('handleApply function is defined:', !!handleApply);
+
 
   if (loading) {
     return (

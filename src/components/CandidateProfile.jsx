@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, getUserProfile, updateUserProfileSaving } from '../lib/firebase';
+import { auth, getUserProfile, updateUserProfile } from '../lib/firebase'; // Corrected import
 import Header from './Header';
 import Footer from './Footer';
 import { Button } from '@/components/ui/button';
@@ -45,7 +44,7 @@ const CandidateProfile = () => {
           setFullName(profile.fullName || '');
           setTitle(profile.title || '');
           setLocation(profile.location || '');
-          setSkills(profile.skills || '');
+          setSkills(profile.skills?.join(', ') || '');
           setEducation(profile.education || '');
           setBio(profile.bio || '');
           setExperience(profile.experience || '');
@@ -77,13 +76,13 @@ const CandidateProfile = () => {
         fullName,
         title,
         location,
-        skills,
+        skills: skills.split(',').map(skill => skill.trim()),
         education,
         bio,
         experience
       };
 
-      await updateUserProfileSaving(user.uid, profileData);
+      await updateUserProfile(user.uid, profileData); // Corrected function call
       
       setSuccess(true);
       setTimeout(() => {
@@ -95,7 +94,6 @@ const CandidateProfile = () => {
     } finally {
       setSaving(false);
     }
-    navigate("/candidate-dashboard");
   };
 
   if (loading) {

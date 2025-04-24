@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { auth, getUserProfile, getUserApplications } from '../lib/firebase';
+import { auth, getUserProfile, getUserApplications, getUserRole } from '../lib/firebase';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,8 +9,21 @@ import { Button } from '@/components/ui/button';
 import { FileText, GraduationCap } from 'lucide-react';
 import Swal from 'sweetalert2';
 
+// Custom hook to handle authentication and navigation
+const useAuthRedirect = (navigate) => {
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (!user) {
+        navigate('/login');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+};
+
 const ApplicationItem = ({ application }) => {
-  const job = application.job;
+  const job = application.job || {};
   const appliedDate = application.appliedAt?.seconds ? 
     new Date(application.appliedAt.seconds * 1000).toLocaleDateString() : 
     'Unknown date';
@@ -20,9 +33,9 @@ const ApplicationItem = ({ application }) => {
       <CardContent className="pt-6">
         <div className="flex flex-col md:flex-row justify-between">
           <div>
-            <h3 className="text-lg font-semibold">{job?.title || 'Job Unavailable'}</h3>
-            <p className="text-sm text-gray-500">{job?.company || 'Unknown'}</p>
-            <p className="text-sm text-gray-500">{job?.location || 'Remote'}</p>
+            <h3 className="text-lg font-semibold">{job.title || 'Job Unavailable'}</h3>
+            <p className="text-sm text-gray-500">{job.company || 'Unknown'}</p>
+            <p className="text-sm text-gray-500">{job.location || 'Remote'}</p>
           </div>
           <div className="mt-2 md:mt-0">
             <span className={`inline-block px-2 py-1 text-xs rounded-full ${
@@ -50,7 +63,6 @@ const educationLabels = {
   'other': 'Other'
 };
 
-// Function to check if profile is incomplete
 const isProfileIncomplete = (profile) => {
   if (!profile) return true;
   return (
@@ -67,55 +79,68 @@ const CandidateDashboard = () => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [userRole, setUserRole] = useState('candidate');
   const navigate = useNavigate();
 
+  // Handle authentication redirect
+  useAuthRedirect(navigate);
+
   useEffect(() => {
+    let isMounted = true;
+
     const loadUserData = async () => {
       try {
         const user = auth.currentUser;
-        if (!user) {
-          navigate('/login');
-          return;
-        }
+        if (!user) return; // Redirect handled by useAuthRedirect
 
-        const [profileData, applicationsData] = await Promise.all([
-          getUserProfile(user.uid),
-          getUserApplications(user.uid)
+        const [profileData, applicationsData, role] = await Promise.all([
+          getUserProfile(user.uid).catch(() => null),
+          getUserApplications(user.uid).catch(() => []),
+          getUserRole(user.uid).catch(() => 'candidate')
         ]);
-        
-        setUserProfile(profileData || {});
-        setApplications(applicationsData || []);
-        setLoading(false);
-        
-        // After loading data, check if profile is incomplete and show alert
-        if (isProfileIncomplete(profileData)) {
-          setTimeout(() => {
-            Swal.fire({
-              title: 'Update Your Profile',
-              text: 'Please complete your profile to improve your job search experience',
-              icon: 'info',
-              confirmButtonText: 'Update Now',
-              showCancelButton: true,
-              cancelButtonText: 'Later',
-              allowOutsideClick: false
-            }).then((result) => {
-              if (result.isConfirmed) {
-                navigate('/candidate-profile');
+
+        if (isMounted) {
+          setUserProfile(profileData || {});
+          setApplications(applicationsData || []);
+          setUserRole(role);
+          setLoading(false);
+
+          if (isProfileIncomplete(profileData) && !window.location.pathname.includes('candidate-profile')) {
+            setTimeout(() => {
+              if (isMounted) {
+                Swal.fire({
+                  title: 'Update Your Profile',
+                  text: 'Please complete your profile to improve your job search experience',
+                  icon: 'info',
+                  confirmButtonText: 'Update Now',
+                  showCancelButton: true,
+                  cancelButtonText: 'Later',
+                  allowOutsideClick: false
+                }).then((result) => {
+                  if (result.isConfirmed && isMounted) {
+                    navigate('/candidate-profile');
+                  }
+                });
               }
-            });
-          }, 500); // Small delay to ensure UI renders first
+            }, 500);
+          }
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
-        setError(error.message.includes('permission') 
-          ? "You don't have permission to access this data. Please contact support."
-          : "Failed to load data. Please try again later.");
-        setLoading(false);
+        if (isMounted) {
+          setError(error.message.includes('permission')
+            ? "You don't have permission to access this data. Please contact support."
+            : "Failed to load data. Please try again later.");
+          setLoading(false);
+        }
       }
     };
 
     loadUserData();
-  }, [navigate]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]); // Dependency on navigate is safe here since useAuthRedirect handles auth
 
   if (loading) {
     return (
@@ -128,7 +153,7 @@ const CandidateDashboard = () => {
   if (error) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Header user={auth.currentUser} userRole="candidate" />
+        <Header user={auth.currentUser} userRole={userRole} />
         <div className="flex-grow flex justify-center items-center">
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-600 p-6 rounded-md max-w-md mx-4">
             <h2 className="text-lg font-semibold text-red-800 dark:text-red-300">Error</h2>
@@ -157,7 +182,7 @@ const CandidateDashboard = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header user={auth.currentUser} userRole="candidate" />
+      <Header user={auth.currentUser} userRole={userRole} />
       
       <main className="flex-grow py-6 px-4 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto">

@@ -9,7 +9,7 @@ const Signup = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("I am a..");
+  const [role, setRole] = useState("candidate"); // Default to "candidate" to avoid empty role
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -21,10 +21,12 @@ const Signup = () => {
     console.log("Starting signup process");
 
     try {
+      if (!role || role === "I am a.." || role === "Select Role") {
+        throw new Error("Please select a valid role");
+      }
       console.log("Calling registration function with:", { name, email, role });
       await registerWithEmailAndPasswordWithRole(name, email, password, role);
       console.log("Registration successful, navigating to login");
-      // navigate("/login");
       setTimeout(() => navigate("/login"), 0);
     } catch (error) {
       console.error("Registration error:", error);
@@ -33,6 +35,7 @@ const Signup = () => {
       setLoading(false);
     }
   };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -103,13 +106,9 @@ const Signup = () => {
                 onChange={(e) => setRole(e.target.value)}
                 required
               >
-                <option value="" style={{display:"none"}}>
-                  Select Role
-                </option>
                 <option value="candidate">Candidate</option>
                 <option value="recruiter">Recruiter</option>
               </select>
-
             </div>
 
             <div className="flex items-center justify-between mb-6">
