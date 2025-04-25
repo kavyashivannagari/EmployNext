@@ -4,7 +4,7 @@ import { auth, getUserRole } from './lib/firebase';
 import { useEffect, useState } from 'react';
 import LandingPage from "./Pages/LandingPage";
 import CandidateDashboard from './Pages/CandidateDashboard';
-import CandidateProfile from './components/CandidateProfile'; // Fixed import
+import CandidateProfile from './components/CandidateProfile';
 import RecruiterDashboard from './Pages/RecruiterDashboard';
 import LoginPage from './Pages/Login';
 import SignupPage from './Pages/Signup';
@@ -23,14 +23,25 @@ function App() {
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isGuestUser, setIsGuestUser] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setUser(user);
+        
+        // Check if the user is a guest recruiter
+        const isGuest = user.email === 'guest-recruiter@employnext.com';
+        setIsGuestUser(isGuest);
+        
         try {
           const role = await getUserRole(user.uid);
-          setUserRole(role);
+          // If it's a guest user and role isn't set, default to recruiter
+          if (isGuest && !role) {
+            setUserRole('recruiter');
+          } else {
+            setUserRole(role);
+          }
         } catch (error) {
           console.error("Error fetching user role:", error);
           setUserRole(null);
@@ -38,6 +49,7 @@ function App() {
       } else {
         setUser(null);
         setUserRole(null);
+        setIsGuestUser(false);
       }
       setLoading(false);
     });
@@ -104,7 +116,7 @@ function App() {
       path: '/recruiter-dashboard',
       element: (
         <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
-          <RecruiterDashboard />
+          <RecruiterDashboard isGuestUser={isGuestUser} />
         </RoleBasedRoute>
       ),
     },
@@ -112,7 +124,7 @@ function App() {
       path: '/recruiter-profile',
       element: (
         <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
-          <RecruiterProfile />
+          <RecruiterProfile isGuestUser={isGuestUser} />
         </RoleBasedRoute>
       ),
     },
@@ -129,7 +141,7 @@ function App() {
       path: '/postjob',
       element: (
         <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
-          <PostJob />
+          <PostJob isGuestUser={isGuestUser} />
         </RoleBasedRoute>
       ),
     },
@@ -145,7 +157,7 @@ function App() {
       path: '/myjobs',
       element: (
         <ProtectedRoute user={user}>
-          <MyJobs />
+          <MyJobs isGuestUser={isGuestUser} />
         </ProtectedRoute>
       ),
     },

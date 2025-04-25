@@ -1,8 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { logoutUser } from "../lib/firebase";
+import { logoutUser, loginAsRecruiterGuest } from "../lib/firebase";
+import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 
 export default function Header({ user, userRole }) {
   const navigate = useNavigate();
+  const [isGuestLoading, setIsGuestLoading] = useState(false);
+  const [guestError, setGuestError] = useState(null);
 
   const handleLogout = async () => {
     try {
@@ -20,6 +24,24 @@ export default function Header({ user, userRole }) {
       navigate('/candidate-dashboard');
     }
     // Add other roles if needed
+  };
+  
+  const handleGuestRecruiterLogin = async () => {
+    setGuestError(null);
+    setIsGuestLoading(true);
+    try {
+      console.log("Starting guest recruiter login process");
+      const user = await loginAsRecruiterGuest();
+      console.log("Guest login successful, navigating to dashboard");
+      navigate('/recruiter-dashboard');
+    } catch (error) {
+      console.error('Guest recruiter login error:', error);
+      setGuestError(error.message || "Failed to login as guest");
+      // Show error in UI
+      setTimeout(() => setGuestError(null), 5000); // Clear error after 5 seconds
+    } finally {
+      setIsGuestLoading(false);
+    }
   };
 
   return (
@@ -69,6 +91,27 @@ export default function Header({ user, userRole }) {
               </>
             ) : (
               <>
+                <div className="relative">
+                  <button 
+                    onClick={handleGuestRecruiterLogin}
+                    disabled={isGuestLoading}
+                    className="hidden sm:inline-flex px-4 py-2 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition"
+                  >
+                    {isGuestLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      'Try as Recruiter'
+                    )}
+                  </button>
+                  {guestError && (
+                    <div className="absolute top-full mt-2 left-0 right-0 bg-red-100 text-red-700 text-xs p-2 rounded">
+                      {guestError}
+                    </div>
+                  )}
+                </div>
                 <button 
                   onClick={() => navigate('/login')}
                   className="px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition"
