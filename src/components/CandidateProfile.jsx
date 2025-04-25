@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, getUserProfile, updateUserProfile } from '../lib/firebase'; // Corrected import
-import Header from './Header';
-import Footer from './Footer';
+import { auth, getUserProfile, updateUserProfile } from '../lib/firebase';
+import Header from '../components/Header';
+import Footer from '../components/Footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -44,7 +44,14 @@ const CandidateProfile = () => {
           setFullName(profile.fullName || '');
           setTitle(profile.title || '');
           setLocation(profile.location || '');
-          setSkills(profile.skills?.join(', ') || '');
+          // Handle both array and string formats for skills
+          if (Array.isArray(profile.skills)) {
+            setSkills(profile.skills.join(', ') || '');
+          } else if (typeof profile.skills === 'string') {
+            setSkills(profile.skills);
+          } else {
+            setSkills('');
+          }
           setEducation(profile.education || '');
           setBio(profile.bio || '');
           setExperience(profile.experience || '');
@@ -72,17 +79,25 @@ const CandidateProfile = () => {
         return;
       }
 
+      // Convert skills string to array or keep as string based on your backend requirements
+      let skillsData;
+      if (skills.includes(',')) {
+        skillsData = skills.split(',').map(skill => skill.trim());
+      } else {
+        skillsData = skills.trim();
+      }
+
       const profileData = {
         fullName,
         title,
         location,
-        skills: skills.split(',').map(skill => skill.trim()),
+        skills: skillsData,
         education,
         bio,
         experience
       };
 
-      await updateUserProfile(user.uid, profileData); // Corrected function call
+      await updateUserProfile(user.uid, profileData);
       
       setSuccess(true);
       setTimeout(() => {
@@ -225,7 +240,7 @@ const CandidateProfile = () => {
               <Button 
                 type="button" 
                 variant="outline"
-                onClick={() => navigate('/candidate-dashboard')}
+                onClick={() => navigate('/candidate-dashboard')} // Updated path to match router
               >
                 Cancel
               </Button>

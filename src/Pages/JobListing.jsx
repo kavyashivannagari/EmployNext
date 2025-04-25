@@ -43,28 +43,40 @@ const JobListing = () => {
         setJobs(jobsData);
         
         if (user) {
-          const savedStatuses = {};
-          const applications = await getUserApplications(user.uid);
-          const appliedStatuses = {};
-          const appIds = {};
-          
-          applications.forEach(app => {
-            appliedStatuses[app.jobId] = true;
-            appIds[app.jobId] = app.id;
-          });
-          
-          for (const job of jobsData) {
-            const isSaved = await isJobSaved(user.uid, job.id);
-            savedStatuses[job.id] = isSaved;
+          try {
+            const applications = await getUserApplications(user.uid);
+            const appliedStatuses = {};
+            const appIds = {};
+            
+            applications.forEach(app => {
+              appliedStatuses[app.jobId] = true;
+              appIds[app.jobId] = app.id;
+            });
+            
+            const savedStatuses = {};
+            for (const job of jobsData) {
+              try {
+                const isSaved = await isJobSaved(user.uid, job.id);
+                savedStatuses[job.id] = isSaved;
+              } catch (err) {
+                console.error(`Error checking saved status for job ${job.id}:`, err);
+                savedStatuses[job.id] = false;
+              }
+            }
+            
+            setSavedJobIds(savedStatuses);
+            setAppliedJobIds(appliedStatuses);
+            setApplicationIds(appIds);
+          } catch (err) {
+            console.error("Error fetching user-specific data:", err);
+            setSavedJobIds({});
+            setAppliedJobIds({});
+            setApplicationIds({});
           }
-          
-          setSavedJobIds(savedStatuses);
-          setAppliedJobIds(appliedStatuses);
-          setApplicationIds(appIds);
         }
       } catch (err) {
         console.error("Error fetching jobs:", err);
-        setError(err.message);
+        setError(err.message || "Failed to load jobs. Please try again later.");
       } finally {
         setLoading(false);
       }
@@ -76,6 +88,11 @@ const JobListing = () => {
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
+      if (!currentUser) {
+        setSavedJobIds({});
+        setAppliedJobIds({});
+        setApplicationIds({});
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -88,7 +105,7 @@ const JobListing = () => {
           setProfile(profileData || {});
         } catch (err) {
           console.error("Error loading profile:", err);
-          setError("Failed to load profile data");
+          setProfile({});
         }
       }
     };
@@ -97,27 +114,28 @@ const JobListing = () => {
 
   const handleSaveJob = async (jobId) => {
     if (!user) {
-      setAlert({ type: 'error', message: 'Please login to save jobs' });
+      navigate('/login', { state: { from: '/jobs' } });
       return;
     }
     
     try {
       if (savedJobIds[jobId]) {
         await unsaveJob(user.uid, jobId);
-        setSavedJobIds({ ...savedJobIds, [jobId]: false });
+        setSavedJobIds(prev => ({ ...prev, [jobId]: false }));
         setAlert({ type: 'success', message: 'Job removed from saved list' });
       } else {
         await saveJob(user.uid, jobId);
-        setSavedJobIds({ ...savedJobIds, [jobId]: true });
+        setSavedJobIds(prev => ({ ...prev, [jobId]: true }));
         setAlert({ type: 'success', message: 'Job saved successfully' });
       }
     } catch (err) {
       console.error("Error saving/unsaving job:", err);
-      if (err.code === 'permission-denied') {
-        setAlert({ type: 'error', message: 'You do not have permission to save jobs. Please contact support.' });
-      } else {
-        setAlert({ type: 'error', message: 'Failed to save job. Please try again.' });
-      }
+      setAlert({ 
+        type: 'error', 
+        message: err.code === 'permission-denied' 
+          ? 'You do not have permission to save jobs. Please contact support.' 
+          : 'Failed to save job. Please try again.'
+      });
     }
   };
 
@@ -145,12 +163,11 @@ const JobListing = () => {
       }
       
       const applicationId = await applyToJob(user.uid, selectedJobId, { resumeUrl });
-      setAppliedJobIds({ ...appliedJobIds, [selectedJobId]: true });
-      setApplicationIds({ ...applicationIds, [selectedJobId]: applicationId });
+      setAppliedJobIds(prev => ({ ...prev, [selectedJobId]: true }));
+      setApplicationIds(prev => ({ ...prev, [selectedJobId]: applicationId }));
       setAlert({ type: 'success', message: 'Application submitted successfully!' });
       setApplyModalOpen(false);
 
-      // Update jobs list to reflect the new application count
       setJobs(jobs.map(job => 
         job.id === selectedJobId 
           ? { ...job, applicationCount: (job.applicationCount || 0) + 1 }
@@ -174,11 +191,10 @@ const JobListing = () => {
       }
       
       await cancelApplication(applicationId);
-      setAppliedJobIds({ ...appliedJobIds, [jobId]: false });
-      setApplicationIds({ ...applicationIds, [jobId]: null });
+      setAppliedJobIds(prev => ({ ...prev, [jobId]: false }));
+      setApplicationIds(prev => ({ ...prev, [jobId]: null }));
       setAlert({ type: 'success', message: 'Application cancelled successfully!' });
 
-      // Update jobs list to reflect the reduced application count
       setJobs(jobs.map(job => 
         job.id === jobId 
           ? { ...job, applicationCount: Math.max((job.applicationCount || 0) - 1, 0) }
@@ -220,6 +236,12 @@ const JobListing = () => {
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-600 p-4 rounded-md">
           <h2 className="text-lg font-semibold text-red-800 dark:text-red-300">Error</h2>
           <p className="text-red-700 dark:text-red-300">{error}</p>
+          <Button 
+            onClick={() => window.location.reload()} 
+            className="mt-2"
+          >
+            Try Again
+          </Button>
         </div>
       </div>
     );

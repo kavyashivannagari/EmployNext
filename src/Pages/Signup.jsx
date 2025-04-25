@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { registerWithEmailAndPasswordWithRole } from "../lib/firebase";
+import { registerWithEmailAndPasswordWithRole, auth } from "../lib/firebase";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { Loader2 } from "lucide-react";
@@ -14,6 +14,17 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Check if user is already logged in and redirect to dashboard
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      // If we detect a logged in user during component mount, 
+      // we don't want to redirect them from the signup page
+      // This prevents auto-redirects after registration
+    });
+    
+    return () => unsubscribe();
+  }, []);
+
   const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
@@ -25,9 +36,26 @@ const Signup = () => {
         throw new Error("Please select a valid role");
       }
       console.log("Calling registration function with:", { name, email, role });
+      
+      // Register the user
       await registerWithEmailAndPasswordWithRole(name, email, password, role);
-      console.log("Registration successful, navigating to login");
-      setTimeout(() => navigate("/login"), 0);
+      console.log("Registration successful");
+      
+      // Important: Sign out the user after registration
+      // This ensures they need to explicitly log in
+      await auth.signOut();
+      
+      // Show success message
+      setError("");
+      
+      // Navigate to login page with a success message
+      navigate("/login", { 
+        state: { 
+          message: "Registration successful! Please log in with your credentials.",
+          type: "success" 
+        } 
+      });
+      
     } catch (error) {
       console.error("Registration error:", error);
       setError(error.message.replace("Firebase: ", ""));
@@ -118,9 +146,10 @@ const Signup = () => {
                 disabled={loading}
               >
                 {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing up...
-                  </>
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                    <span>Signing up...</span>
+                  </div>
                 ) : (
                   "Sign Up"
                 )}

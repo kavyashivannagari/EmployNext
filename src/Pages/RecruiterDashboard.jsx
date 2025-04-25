@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Link} from 'react-router-dom';
-import { auth, getUserProfile, getJobsByRecruiter } from '../lib/firebase';
+import { Link, useLocation } from 'react-router-dom';
+import { auth, getUserProfile, getJobsByRecruiter, createUserProfile, deleteJob } from '../lib/firebase';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import PostJobModal from '../components/PostModal';
+import RecruiterProfileModal from '../components/RecruiterProfile';
+import { Button } from '../components/ui/button';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import { X } from 'lucide-react';
 
-const JobItem = ({ job }) => {
+const JobItem = ({ job, onDelete }) => {
   const postedDate = job.postedAt && new Date(job.postedAt.seconds * 1000).toLocaleDateString();
   const applicationsCount = job.applications?.length || 0;
   
@@ -14,24 +18,41 @@ const JobItem = ({ job }) => {
     <Card className="mb-4">
       <CardContent className="pt-6">
         <div className="flex flex-col md:flex-row justify-between">
-          <div>
-            <h3 className="text-lg font-semibold">{job.title}</h3>
-            <p className="text-sm text-gray-500">{job.location}</p>
+          <div className="flex-1">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-semibold">{job.title}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{job.companyName} • {job.location}</p>
+              </div>
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={() => onDelete(job.id)}
+                className="ml-4"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
             <div className="flex gap-2 mt-2">
-              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+              <span className="bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 text-xs px-2 py-1 rounded">
                 {job.type}
               </span>
-              <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+              <span className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 text-xs px-2 py-1 rounded">
                 ${job.minSalary} - ${job.maxSalary}
               </span>
             </div>
           </div>
-          <div className="mt-2 md:mt-0 text-right">
-            <p className="text-xs text-gray-500">Posted: {postedDate || 'N/A'}</p>
+          
+          <div className="mt-2 md:mt-0 md:text-right">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Posted: {postedDate || 'N/A'}</p>
             <p className="text-sm mt-1">
               <span className="font-bold">{applicationsCount}</span> application{applicationsCount !== 1 && 's'}
             </p>
-            <Link to={`/job/${job.id}`} className="text-blue-600 text-sm hover:underline block mt-2">
+            <Link 
+              to={`/job/${job.id}`} 
+              className="text-blue-600 dark:text-blue-400 text-sm hover:underline inline-block mt-2"
+            >
               View Details
             </Link>
           </div>
@@ -46,7 +67,9 @@ const RecruiterDashboard = () => {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // const navigate = useNavigate();
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [alert, setAlert] = useState(null);
+  const location = useLocation();
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -54,20 +77,39 @@ const RecruiterDashboard = () => {
         const user = auth.currentUser;
         if (!user) return;
 
-        const profileData = await getUserProfile(user.uid);
-        setUserProfile(profileData);
+        try {
+          const profileData = await getUserProfile(user.uid);
+          setUserProfile(profileData);
+        } catch (error) {
+          if (error.message === "Profile not found") {
+            const defaultProfile = {
+              fullName: user.displayName || '',
+              companyName: '',
+              position: '',
+              location: '',
+              industry: '',
+              companyWebsite: '',
+              companyDescription: ''
+            };
+            await createUserProfile(user.uid, defaultProfile);
+            setUserProfile(defaultProfile);
+          } else {
+            throw error;
+          }
+        }
 
         const jobsData = await getJobsByRecruiter(user.uid);
         setJobs(jobsData);
       } catch (error) {
         console.error('Error loading user data:', error);
+        setAlert({ type: 'error', message: error.message || 'Failed to load data' });
       } finally {
         setLoading(false);
       }
     };
 
     loadUserData();
-  }, []);
+  }, [location.key]);
 
   const openPostJobModal = () => {
     setIsModalOpen(true);
@@ -75,11 +117,38 @@ const RecruiterDashboard = () => {
 
   const closePostJobModal = () => {
     setIsModalOpen(false);
-    // Refresh jobs after posting
     if (auth.currentUser) {
       getJobsByRecruiter(auth.currentUser.uid).then(jobsData => {
         setJobs(jobsData);
       });
+    }
+  };
+
+  const handleProfileUpdate = (updatedProfile) => {
+    setUserProfile(updatedProfile);
+  };
+
+  const handleDeleteJob = async (jobId) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("Authentication required");
+      }
+
+      if (!window.confirm("Are you sure you want to delete this job posting?")) {
+        return;
+      }
+
+      await deleteJob(jobId);
+      
+      setJobs(jobs.filter(job => job.id !== jobId));
+      setAlert({ type: 'success', message: 'Job deleted successfully' });
+      
+      // Clear alert after 3 seconds
+      setTimeout(() => setAlert(null), 3000);
+    } catch (error) {
+      console.error('Error deleting job:', error);
+      setAlert({ type: 'error', message: error.message || 'Failed to delete job' });
     }
   };
 
@@ -91,12 +160,28 @@ const RecruiterDashboard = () => {
     );
   }
 
+  const profileData = userProfile || {
+    fullName: '',
+    companyName: '',
+    position: '',
+    location: '',
+    industry: '',
+    companyWebsite: '',
+    companyDescription: ''
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header user={auth.currentUser} userRole="recruiter" />
       
       <main className="flex-grow py-6 px-4 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto">
+          {alert && (
+            <Alert variant={alert.type === 'error' ? 'destructive' : 'default'} className="mb-4">
+              <AlertDescription>{alert.message}</AlertDescription>
+            </Alert>
+          )}
+          
           <div className="flex flex-col md:flex-row gap-6">
             {/* Company Profile Section */}
             <div className="md:w-1/3">
@@ -107,48 +192,51 @@ const RecruiterDashboard = () => {
                 <CardContent>
                   <div className="flex items-center gap-4 mb-4">
                     <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-2xl font-bold text-blue-600 dark:text-blue-300">
-                      {userProfile?.companyName?.charAt(0).toUpperCase() || 'C'}
+                      {profileData.companyName?.charAt(0).toUpperCase() || 'C'}
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold">{userProfile?.companyName || 'Company'}</h2>
-                      <p className="text-gray-600 dark:text-gray-400">{userProfile?.industry || 'Industry'}</p>
+                      <h2 className="text-xl font-bold">{profileData.companyName || 'Company'}</h2>
+                      <p className="text-gray-600 dark:text-gray-400">{profileData.industry || 'Industry'}</p>
                     </div>
                   </div>
                   
                   <div className="space-y-3">
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-500">Recruiter</h3>
-                      <p>{userProfile?.fullName || 'Not specified'}</p>
-                      <p className="text-sm text-gray-500">{userProfile?.position || 'Position'}</p>
+                      <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">Recruiter</h3>
+                      <p>{profileData.fullName || 'Not specified'}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{profileData.position || 'Position'}</p>
                     </div>
                     
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-500">Location</h3>
-                      <p>{userProfile?.location || 'Not specified'}</p>
+                      <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">Location</h3>
+                      <p>{profileData.location || 'Not specified'}</p>
                     </div>
                     
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-500">Website</h3>
+                      <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">Website</h3>
                       <a 
-                        href={userProfile?.companyWebsite} 
+                        href={profileData.companyWebsite} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
                       >
-                        {userProfile?.companyWebsite || 'Not specified'}
+                        {profileData.companyWebsite || 'Not specified'}
                       </a>
                     </div>
                     
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-500">About</h3>
-                      <p className="text-sm">{userProfile?.companyDescription || 'No description provided'}</p>
+                      <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">About</h3>
+                      <p className="text-sm">{profileData.companyDescription || 'No description provided'}</p>
                     </div>
                   </div>
                   
                   <div className="mt-4">
-                    <Link to="/recruiter-profile" className="text-blue-600 text-sm hover:underline">
+                    <button
+                      onClick={() => setIsProfileModalOpen(true)}
+                      className="text-blue-600 dark:text-blue-400 text-sm hover:underline"
+                    >
                       Edit Profile
-                    </Link>
+                    </button>
                   </div>
                 </CardContent>
               </Card>
@@ -156,7 +244,7 @@ const RecruiterDashboard = () => {
               <div className="mt-6 grid grid-cols-1 gap-4">
                 <button 
                   onClick={openPostJobModal}
-                  className="bg-blue-600 text-white p-4 rounded text-center hover:bg-blue-700 transition-colors"
+                  className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded text-center transition-colors"
                 >
                   Post New Job
                 </button>
@@ -199,17 +287,17 @@ const RecruiterDashboard = () => {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Your Job Listings</CardTitle>
-                  <Link to="/myjobs" className="text-blue-600 text-sm hover:underline">
+                  <Link to="/myjobs" className="text-blue-600 dark:text-blue-400 text-sm hover:underline">
                     View All
                   </Link>
                 </CardHeader>
                 <CardContent>
                   {jobs.length === 0 ? (
                     <div className="text-center py-8">
-                      <p className="text-gray-500">You haven't posted any jobs yet.</p>
+                      <p className="text-gray-500 dark:text-gray-400">You haven't posted any jobs yet.</p>
                       <button 
                         onClick={openPostJobModal}
-                        className="text-blue-600 hover:underlineir mt-2 inline-block"
+                        className="text-blue-600 dark:text-blue-400 hover:underline mt-2 inline-block"
                       >
                         Post Your First Job
                       </button>
@@ -217,12 +305,12 @@ const RecruiterDashboard = () => {
                   ) : (
                     <div>
                       {jobs.slice(0, 3).map((job) => (
-                        <JobItem key={job.id} job={job} />
+                        <JobItem key={job.id} job={job} onDelete={handleDeleteJob} />
                       ))}
                       
                       {jobs.length > 3 && (
                         <div className="text-center mt-4">
-                          <Link to="/myjobs" className="text-blue-600 hover:underline">
+                          <Link to="/myjobs" className="text-blue-600 dark:text-blue-400 hover:underline">
                             View {jobs.length - 3} more job{jobs.length - 3 !== 1 && 's'}
                           </Link>
                         </div>
@@ -237,6 +325,14 @@ const RecruiterDashboard = () => {
       </main>
       
       {isModalOpen && <PostJobModal isOpen={isModalOpen} onClose={closePostJobModal} />}
+      {isProfileModalOpen && (
+        <RecruiterProfileModal 
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          onProfileUpdate={handleProfileUpdate}
+          initialProfile={profileData}
+        />
+      )}
       
       <Footer />
     </div>

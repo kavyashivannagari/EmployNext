@@ -1,16 +1,25 @@
 import { Link, useNavigate } from 'react-router-dom';
-import {logoutUser}from "../lib/firebase"
+import { logoutUser } from "../lib/firebase";
 
 export default function Header({ user, userRole }) {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {
-      await logoutUser(); // Call the actual logout function
-      navigate('/'); // Navigate to home after logout
+      await logoutUser();
+      navigate('/');
     } catch (error) {
       console.error('Error logging out:', error);
     }
+  };
+
+  const handleProfileClick = () => {
+    if (userRole === 'recruiter') {
+      navigate('/recruiter-dashboard');
+    } else if (userRole === 'candidate') {
+      navigate('/candidate-dashboard');
+    }
+    // Add other roles if needed
   };
 
   return (
@@ -41,10 +50,15 @@ export default function Header({ user, userRole }) {
             {user ? (
               <>
                 <div className="hidden md:flex items-center space-x-2">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
-                    {user.displayName?.charAt(0) || 'U'}
-                  </div>
-                  <span className="text-gray-700">{user.displayName || 'User'}</span>
+                  <button 
+                    onClick={handleProfileClick}
+                    className="flex items-center space-x-2 hover:bg-gray-100 px-2 py-1 rounded-lg transition"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
+                      {user.displayName?.charAt(0) || 'U'}
+                    </div>
+                    <span className="text-gray-700">{user.displayName || 'User'}</span>
+                  </button>
                 </div>
                 <button 
                   onClick={handleLogout}

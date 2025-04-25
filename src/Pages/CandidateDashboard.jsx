@@ -7,20 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, GraduationCap } from 'lucide-react';
-import Swal from 'sweetalert2';
-
-// Custom hook to handle authentication and navigation
-const useAuthRedirect = (navigate) => {
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (!user) {
-        navigate('/login');
-      }
-    });
-
-    return () => unsubscribe();
-  }, [navigate]);
-};
 
 const ApplicationItem = ({ application }) => {
   const job = application.job || {};
@@ -73,7 +59,7 @@ const isProfileIncomplete = (profile) => {
     !profile.education
   );
 };
-
+console.log(isProfileIncomplete)
 const CandidateDashboard = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [applications, setApplications] = useState([]);
@@ -82,65 +68,38 @@ const CandidateDashboard = () => {
   const [userRole, setUserRole] = useState('candidate');
   const navigate = useNavigate();
 
-  // Handle authentication redirect
-  useAuthRedirect(navigate);
-
   useEffect(() => {
-    let isMounted = true;
-
     const loadUserData = async () => {
       try {
         const user = auth.currentUser;
-        if (!user) return; // Redirect handled by useAuthRedirect
+        if (!user) {
+          navigate('/login');
+          return;
+        }
 
         const [profileData, applicationsData, role] = await Promise.all([
           getUserProfile(user.uid).catch(() => null),
           getUserApplications(user.uid).catch(() => []),
           getUserRole(user.uid).catch(() => 'candidate')
         ]);
-
-        if (isMounted) {
-          setUserProfile(profileData || {});
-          setApplications(applicationsData || []);
-          setUserRole(role);
-          setLoading(false);
-
-          if (isProfileIncomplete(profileData) && !window.location.pathname.includes('candidate-profile')) {
-            setTimeout(() => {
-              if (isMounted) {
-                Swal.fire({
-                  title: 'Update Your Profile',
-                  text: 'Please complete your profile to improve your job search experience',
-                  icon: 'info',
-                  confirmButtonText: 'Update Now',
-                  showCancelButton: true,
-                  cancelButtonText: 'Later',
-                  allowOutsideClick: false
-                }).then((result) => {
-                  if (result.isConfirmed && isMounted) {
-                    navigate('/candidate-profile');
-                  }
-                });
-              }
-            }, 500);
-          }
-        }
+        
+        setUserProfile(profileData || {});
+        setApplications(applicationsData || []);
+        setUserRole(role);
+        setLoading(false);
+        
+        // SweetAlert has been removed
       } catch (error) {
-        if (isMounted) {
-          setError(error.message.includes('permission')
-            ? "You don't have permission to access this data. Please contact support."
-            : "Failed to load data. Please try again later.");
-          setLoading(false);
-        }
+        console.error('Error loading user data:', error);
+        setError(error.message.includes('permission') 
+          ? "You don't have permission to access this data. Please contact support."
+          : "Failed to load data. Please try again later.");
+        setLoading(false);
       }
     };
 
     loadUserData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [navigate]); // Dependency on navigate is safe here since useAuthRedirect handles auth
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -258,6 +217,7 @@ const CandidateDashboard = () => {
                   </div>
                   
                   <div className="mt-4">
+                    {/* Updated Link path to match router configuration */}
                     <Link to="/candidate-profile" className="text-blue-600 text-sm hover:underline">
                       Edit Profile
                     </Link>

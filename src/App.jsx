@@ -4,11 +4,11 @@ import { auth, getUserRole } from './lib/firebase';
 import { useEffect, useState } from 'react';
 import LandingPage from "./Pages/LandingPage";
 import CandidateDashboard from './Pages/CandidateDashboard';
-import CandidateProfile from './components/CandidateProfile';
+import CandidateProfile from './components/CandidateProfile'; // Fixed import
 import RecruiterDashboard from './Pages/RecruiterDashboard';
 import LoginPage from './Pages/Login';
 import SignupPage from './Pages/Signup';
-import ProtectedRoute from'./components/ProtectedRoute';
+import ProtectedRoute from './components/ProtectedRoute';
 import RoleBasedRoute from './components/RoleBasedRoute';
 import JobPage from './Pages/Job';
 import JobListing from './Pages/JobListing';
@@ -16,6 +16,8 @@ import PostJob from './Pages/PostJob';
 import SavedJobs from './Pages/SaveJob';
 import MyJobs from './Pages/MyJob';
 import Onboarding from './Pages/Onboarding';
+import RecruiterProfile from './components/RecruiterProfile';
+import { Loader2 } from 'lucide-react';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -26,12 +28,12 @@ function App() {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setUser(user);
-        // Fetch user role from Firestore
         try {
           const role = await getUserRole(user.uid);
           setUserRole(role);
         } catch (error) {
           console.error("Error fetching user role:", error);
+          setUserRole(null);
         }
       } else {
         setUser(null);
@@ -49,27 +51,45 @@ function App() {
       element: <LandingPage user={user} userRole={userRole} />,
     },
     {
-      // path: '/login',
-      // element : <LoginPage />
       path: "/login",
-      // element: user ? <Navigate to="/candidate-dashboard" /> : <LoginPage />
-      element: user ? <Navigate to={userRole === 'recruiter' ? '/recruiter-dashboard' : '/candidate-dashboard'} /> : <LoginPage />
+      element: user ? (
+        userRole === 'recruiter' ? (
+          <Navigate to="/recruiter-dashboard" replace />
+        ) : (
+          <Navigate to="/candidate-dashboard" replace />
+        )
+      ) : (
+        <LoginPage />
+      ),
     },
     {
       path: '/signup',
-      element: user ? <LoginPage /> :<SignupPage />
+      element: user ? (
+        userRole === 'recruiter' ? (
+          <Navigate to="/recruiter-dashboard" replace />
+        ) : (
+          <Navigate to="/candidate-dashboard" replace />
+        )
+      ) : (
+        <SignupPage />
+      ),
     },
     {
       path: '/onboarding',
-      element: <Onboarding />
+      element: (
+        <ProtectedRoute user={user}>
+          <Onboarding />
+        </ProtectedRoute>
+      ),
     },
+    // Candidate Routes
     {
       path: '/candidate-dashboard',
       element: (
         <RoleBasedRoute allowedRoles={['candidate']} userRole={userRole}>
           <CandidateDashboard />
         </RoleBasedRoute>
-      )
+      ),
     },
     {
       path: '/candidate-profile',
@@ -77,23 +97,33 @@ function App() {
         <RoleBasedRoute allowedRoles={['candidate']} userRole={userRole}>
           <CandidateProfile />
         </RoleBasedRoute>
-      )
+      ),
     },
+    // Recruiter Routes
     {
       path: '/recruiter-dashboard',
       element: (
         <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
           <RecruiterDashboard />
         </RoleBasedRoute>
-      )
+      ),
     },
     {
+      path: '/recruiter-profile',
+      element: (
+        <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
+          <RecruiterProfile />
+        </RoleBasedRoute>
+      ),
+    },
+    // Shared Routes
+    {
       path: '/job/:id',
-      element: <JobPage />
+      element: <JobPage />,
     },
     {
       path: '/jobs',
-      element: <JobListing />
+      element: <JobListing />,
     },
     {
       path: '/postjob',
@@ -101,7 +131,7 @@ function App() {
         <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
           <PostJob />
         </RoleBasedRoute>
-      )
+      ),
     },
     {
       path: '/savedjobs',
@@ -109,7 +139,7 @@ function App() {
         <RoleBasedRoute allowedRoles={['candidate']} userRole={userRole}>
           <SavedJobs />
         </RoleBasedRoute>
-      )
+      ),
     },
     {
       path: '/myjobs',
@@ -117,18 +147,22 @@ function App() {
         <ProtectedRoute user={user}>
           <MyJobs />
         </ProtectedRoute>
-      )
+      ),
     },
+    // Fallback Route
     {
       path: '*',
-      element: <Navigate to="/" />
-    }
+      element: <Navigate to="/" replace />,
+    },
   ]);
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+          <p className="mt-4 text-gray-600">Loading application...</p>
+        </div>
       </div>
     );
   }
