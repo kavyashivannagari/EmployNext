@@ -10,7 +10,7 @@ import { Button } from '../components/ui/button';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { X } from 'lucide-react';
 
-const JobItem = ({ job, onDelete }) => {
+const JobItem = ({ job, onDelete, isGuest }) => {
   const postedDate = job.postedAt && new Date(job.postedAt.seconds * 1000).toLocaleDateString();
   const applicationsCount = job.applications?.length || 0;
   
@@ -24,14 +24,16 @@ const JobItem = ({ job, onDelete }) => {
                 <h3 className="text-lg font-semibold">{job.title}</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{job.companyName} • {job.location}</p>
               </div>
-              <Button 
-                variant="destructive" 
-                size="sm"
-                onClick={() => onDelete(job.id)}
-                className="ml-4"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              {!isGuest && (
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => onDelete(job.id)}
+                  className="ml-4"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             
             <div className="flex gap-2 mt-2">
@@ -62,7 +64,7 @@ const JobItem = ({ job, onDelete }) => {
   );
 };
 
-const RecruiterDashboard = () => {
+const RecruiterDashboard = ({ isGuest = false }) => {
   const [userProfile, setUserProfile] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -84,12 +86,12 @@ const RecruiterDashboard = () => {
           if (error.message === "Profile not found") {
             const defaultProfile = {
               fullName: user.displayName || '',
-              companyName: '',
-              position: '',
-              location: '',
-              industry: '',
+              companyName: isGuest ? "Demo Company" : '',
+              position: isGuest ? "HR Manager" : '',
+              location: isGuest ? "Remote" : '',
+              industry: isGuest ? "Technology" : '',
               companyWebsite: '',
-              companyDescription: ''
+              companyDescription: isGuest ? "Guest account for demo purposes" : ''
             };
             await createUserProfile(user.uid, defaultProfile);
             setUserProfile(defaultProfile);
@@ -109,9 +111,16 @@ const RecruiterDashboard = () => {
     };
 
     loadUserData();
-  }, [location.key]);
+  }, [location.key, isGuest]);
 
   const openPostJobModal = () => {
+    if (isGuest) {
+      setAlert({
+        type: 'error',
+        message: 'Guest users cannot post jobs. Please sign up for a full account.'
+      });
+      return;
+    }
     setIsModalOpen(true);
   };
 
@@ -130,6 +139,10 @@ const RecruiterDashboard = () => {
 
   const handleDeleteJob = async (jobId) => {
     try {
+      if (isGuest) {
+        throw new Error("Guest users cannot delete jobs");
+      }
+
       const user = auth.currentUser;
       if (!user) {
         throw new Error("Authentication required");
@@ -144,7 +157,6 @@ const RecruiterDashboard = () => {
       setJobs(jobs.filter(job => job.id !== jobId));
       setAlert({ type: 'success', message: 'Job deleted successfully' });
       
-      // Clear alert after 3 seconds
       setTimeout(() => setAlert(null), 3000);
     } catch (error) {
       console.error('Error deleting job:', error);
@@ -179,6 +191,14 @@ const RecruiterDashboard = () => {
           {alert && (
             <Alert variant={alert.type === 'error' ? 'destructive' : 'default'} className="mb-4">
               <AlertDescription>{alert.message}</AlertDescription>
+            </Alert>
+          )}
+          
+          {isGuest && (
+            <Alert className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400">
+              <AlertDescription className="text-yellow-800 dark:text-yellow-300">
+                You are using a guest account. Some features are limited.
+              </AlertDescription>
             </Alert>
           )}
           
@@ -230,23 +250,26 @@ const RecruiterDashboard = () => {
                     </div>
                   </div>
                   
-                  <div className="mt-4">
-                    <button
-                      onClick={() => setIsProfileModalOpen(true)}
-                      className="text-blue-600 dark:text-blue-400 text-sm hover:underline"
-                    >
-                      Edit Profile
-                    </button>
-                  </div>
+                  {!isGuest && (
+                    <div className="mt-4">
+                      <button
+                        onClick={() => setIsProfileModalOpen(true)}
+                        className="text-blue-600 dark:text-blue-400 text-sm hover:underline"
+                      >
+                        Edit Profile
+                      </button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               
               <div className="mt-6 grid grid-cols-1 gap-4">
                 <button 
                   onClick={openPostJobModal}
-                  className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded text-center transition-colors"
+                  className={`${isGuest ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white p-4 rounded text-center transition-colors`}
+                  disabled={isGuest}
                 >
-                  Post New Job
+                  {isGuest ? 'Posting Disabled for Guests' : 'Post New Job'}
                 </button>
               </div>
             </div>
@@ -294,18 +317,27 @@ const RecruiterDashboard = () => {
                 <CardContent>
                   {jobs.length === 0 ? (
                     <div className="text-center py-8">
-                      <p className="text-gray-500 dark:text-gray-400">You haven't posted any jobs yet.</p>
-                      <button 
-                        onClick={openPostJobModal}
-                        className="text-blue-600 dark:text-blue-400 hover:underline mt-2 inline-block"
-                      >
-                        Post Your First Job
-                      </button>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        {isGuest ? 'Demo job listings will appear here' : 'You haven\'t posted any jobs yet.'}
+                      </p>
+                      {!isGuest && (
+                        <button 
+                          onClick={openPostJobModal}
+                          className="text-blue-600 dark:text-blue-400 hover:underline mt-2 inline-block"
+                        >
+                          Post Your First Job
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div>
                       {jobs.slice(0, 3).map((job) => (
-                        <JobItem key={job.id} job={job} onDelete={handleDeleteJob} />
+                        <JobItem 
+                          key={job.id} 
+                          job={job} 
+                          onDelete={handleDeleteJob}
+                          isGuest={isGuest}
+                        />
                       ))}
                       
                       {jobs.length > 3 && (

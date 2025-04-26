@@ -612,73 +612,46 @@ export const getUserRole = async (uid) => {
   }
 };
 
-// Modified Guest Recruiter Login Function
+// Add this to your existing firebase.js
+
 export const loginAsRecruiterGuest = async () => {
   try {
-    // Use a predefined email and password for the guest recruiter account
-    const email = "guest-recruiter@employnext.com";
-    const password = "guestrecruiter123";
-    
+    const guestEmail = import.meta.env.VITE_GUEST_EMAIL || 'guest-recruiter@employnext.com';
+    const guestPassword = import.meta.env.VITE_GUEST_PASSWORD || 'Guest@1234';
+
     try {
-      // Try to login with the guest account
-      console.log("Attempting to log in as guest recruiter");
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log("Guest login successful");
+      // Try to sign in first
+      const userCredential = await signInWithEmailAndPassword(auth, guestEmail, guestPassword);
       return userCredential.user;
-    } catch (authError) {
-      console.error("Initial login attempt failed:", authError.code, authError.message);
-      
-      // If the account doesn't exist or credential is invalid, create a new one
-      if (authError.code === 'auth/user-not-found' || authError.code === 'auth/invalid-credential' || authError.code === 'auth/wrong-password') {
-        console.log("Creating new guest account");
-        // First, check if user with this email exists but has wrong credentials
-        try {
-          const methods = await fetchSignInMethodsForEmail(auth, email);
-          console.log("Sign-in methods for email:", methods);
-          if (methods && methods.length > 0) {
-            throw new Error("Guest account exists but password may be incorrect");
-          }
-        } catch (checkError) {
-          console.error("Error checking email:", checkError);
-        }
-        
-        // Try creating new account
-        console.log("Attempting to create new guest account");
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    } catch (signInError) {
+      // If account doesn't exist or wrong password, create it
+      if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/wrong-password') {
+        const userCredential = await createUserWithEmailAndPassword(auth, guestEmail, guestPassword);
         const user = userCredential.user;
         
-        // Set display name
-        console.log("Setting display name for guest account");
         await updateAuthProfile(user, { displayName: "Guest Recruiter" });
-        
-        // Set user role to recruiter
-        console.log("Setting role for guest account");
         await setUserRole(user.uid, "recruiter");
         
-        // Create a basic profile
-        console.log("Creating profile for guest account");
         await createUserProfile(user.uid, {
           fullName: "Guest Recruiter",
-          companyName: "Demo Company Inc.",
+          companyName: "Demo Company",
           position: "HR Manager",
           location: "Remote",
           industry: "Technology",
-          companyWebsite: "www.democompany.com",
-          companyDescription: "This is a demo recruiter account for guests to explore the platform.",
-          resumeUrl: ''
+          companyWebsite: "",
+          companyDescription: "Guest account for demo purposes",
+          resumeUrl: ""
         });
         
-        console.log("Guest account created successfully");
         return user;
-      } else {
-        console.error("Unhandled auth error:", authError);
-        throw authError;
       }
+      throw signInError;
     }
   } catch (error) {
-    console.error("Critical error in guest recruiter login:", error);
+    console.error("Guest recruiter login failed:", error);
     throw error;
   }
 };
+
 
 export { auth, db, googleProvider };

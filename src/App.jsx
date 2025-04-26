@@ -2,21 +2,22 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { ThemeProvider } from "./components/themeProvider";
 import { auth, getUserRole } from './lib/firebase';
 import { useEffect, useState } from 'react';
-import LandingPage from "./Pages/LandingPage";
-import CandidateDashboard from './Pages/CandidateDashboard';
+import LandingPage from "./pages/LandingPage";
+import CandidateDashboard from './pages/CandidateDashboard';
 import CandidateProfile from './components/CandidateProfile';
-import RecruiterDashboard from './Pages/RecruiterDashboard';
-import LoginPage from './Pages/Login';
-import SignupPage from './Pages/Signup';
+import RecruiterDashboard from './pages/RecruiterDashboard';
+import LoginPage from './pages/Login';
+import SignupPage from './pages/Signup';
 import ProtectedRoute from './components/ProtectedRoute';
 import RoleBasedRoute from './components/RoleBasedRoute';
-import JobPage from './Pages/Job';
-import JobListing from './Pages/JobListing';
+import JobPage from './pages/Job';
+import JobListing from './pages/JobListing';
 import PostJob from './Pages/PostJob';
 import SavedJobs from './Pages/SaveJob';
 import MyJobs from './Pages/MyJob';
-import Onboarding from './Pages/Onboarding';
+import Onboarding from './pages/Onboarding';
 import RecruiterProfile from './components/RecruiterProfile';
+import RecruiterGuestLogin from './components/RecruiterGuestLogin';
 import { Loader2 } from 'lucide-react';
 
 function App() {
@@ -30,18 +31,13 @@ function App() {
       if (user) {
         setUser(user);
         
-        // Check if the user is a guest recruiter
-        const isGuest = user.email === 'guest-recruiter@employnext.com';
+        // Check if user is a guest recruiter
+        const isGuest = user.email === (import.meta.env.VITE_GUEST_EMAIL || 'guest-recruiter@employnext.com');
         setIsGuestUser(isGuest);
         
         try {
           const role = await getUserRole(user.uid);
-          // If it's a guest user and role isn't set, default to recruiter
-          if (isGuest && !role) {
-            setUserRole('recruiter');
-          } else {
-            setUserRole(role);
-          }
+          setUserRole(role);
         } catch (error) {
           console.error("Error fetching user role:", error);
           setUserRole(null);
@@ -72,6 +68,18 @@ function App() {
         )
       ) : (
         <LoginPage />
+      ),
+    },
+    {
+      path: '/recruiter-guest-login',
+      element: user ? (
+        userRole === 'recruiter' ? (
+          <Navigate to="/recruiter-dashboard" replace />
+        ) : (
+          <Navigate to="/candidate-dashboard" replace />
+        )
+      ) : (
+        <RecruiterGuestLogin />
       ),
     },
     {
@@ -116,7 +124,7 @@ function App() {
       path: '/recruiter-dashboard',
       element: (
         <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
-          <RecruiterDashboard isGuestUser={isGuestUser} />
+          <RecruiterDashboard isGuest={isGuestUser} />
         </RoleBasedRoute>
       ),
     },
@@ -124,14 +132,14 @@ function App() {
       path: '/recruiter-profile',
       element: (
         <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
-          <RecruiterProfile isGuestUser={isGuestUser} />
+          <RecruiterProfile isGuest={isGuestUser} />
         </RoleBasedRoute>
       ),
     },
     // Shared Routes
     {
       path: '/job/:id',
-      element: <JobPage />,
+      element: <JobPage isGuest={isGuestUser} />,
     },
     {
       path: '/jobs',
@@ -141,7 +149,7 @@ function App() {
       path: '/postjob',
       element: (
         <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
-          <PostJob isGuestUser={isGuestUser} />
+          <PostJob isGuest={isGuestUser} />
         </RoleBasedRoute>
       ),
     },
@@ -157,7 +165,7 @@ function App() {
       path: '/myjobs',
       element: (
         <ProtectedRoute user={user}>
-          <MyJobs isGuestUser={isGuestUser} />
+          <MyJobs isGuest={isGuestUser} />
         </ProtectedRoute>
       ),
     },
