@@ -316,7 +316,7 @@ const JobListing = () => {
                           </div>
                           <div className="flex items-center">
                             <DollarSign className="h-4 w-4 mr-1" />
-                            ${job.minSalary} - ${job.maxSalary}
+                            {job.minSalary}LPA- {job.maxSalary}LPA
                           </div>
                           <div className="flex items-center">
                             <Briefcase className="h-4 w-4 mr-1" />

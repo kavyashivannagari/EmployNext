@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { loginWithEmailAndPassword, signInWithGoogle, loginAsRecruiterGuest } from '../lib/firebase';
+import { loginWithEmailAndPassword, loginAsGuestCandidate, loginAsGuestRecruiter, getUserRole } from '../lib/firebase';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -10,16 +10,21 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isGuestLoading, setIsGuestLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     try {
-      await loginWithEmailAndPassword(email, password);
-      navigate('/');
+      const userCredential = await loginWithEmailAndPassword(email, password);
+      const user = userCredential;
+      const role = await getUserRole(user.uid);
+      if (role === 'recruiter') {
+        navigate('/recruiter-dashboard', { replace: true });
+      } else {
+        navigate('/candidate-dashboard', { replace: true });
+      }
     } catch (error) {
       console.error('Login error:', error);
       alert(`Login failed: ${error.message}`);
@@ -28,55 +33,71 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+
+const handleGuestCandidate = async () => {
+  try {
     setIsLoading(true);
-    try {
-      await signInWithGoogle();
-      navigate('/');
-    } catch (error) {
-      console.error('Google sign-in error:', error);
-      alert(`Google sign-in failed: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleGuestRecruiterLogin = async () => {
-    setIsGuestLoading(true);
-    try {
-      await loginAsRecruiterGuest();
-      alert('Welcome, Guest Recruiter!\nYou are now logged in as a guest recruiter.');
-      navigate('/recruiter-dashboard');
-    } catch (error) {
-      console.error('Guest recruiter login error:', error);
-      alert(`Guest login failed: ${error.message}`);
-    } finally {
-      setIsGuestLoading(false);
-    }
-  };
+    await loginAsGuestCandidate();
+    // Add a small delay to ensure sessionStorage is set before navigation
+    setTimeout(() => {
+      navigate('/candidate-dashboard', { replace: true });
+    }, 300);
+  } catch (error) {
+    console.error('Guest candidate login error:', error);
+    alert(`Guest login failed: ${error.message}`);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+const handleGuestRecruiter = async () => {
+  try {
+    setIsLoading(true);
+    await loginAsGuestRecruiter();
+    setTimeout(() => {
+      console.log('Navigating to recruiter dashboard as guest');
+      navigate('/recruiter-dashboard', { replace: true });
+    }, 300);
+  } catch (error) {
+    console.error('Guest recruiter login error:', error);
+    alert(`Guest login failed: ${error.message}`);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
       <div className="flex flex-1 flex-col justify-center py-12 px-4 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
         <div className="mx-auto w-full max-w-sm lg:w-96">
           <div className="text-center">
-            <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Sign in to your account</h2>
-            <p className="mt-2 text-sm text-gray-600">
-              Or{' '}
-              <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
-                create a new account
-              </Link>
+            <div className="flex justify-center mb-2">
+              <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+                </svg>
+              </div>
+            </div>
+            <h2 className="mt-4 text-3xl font-bold text-white">Welcome Back</h2>
+            <p className="mt-2 text-sm text-gray-300">
+              Sign in to your account or continue as guest
             </p>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-10">
             <div className="mt-6">
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <Label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  <Label htmlFor="email" className="block text-sm font-medium text-gray-300">
                     Email address
                   </Label>
-                  <div className="mt-1">
+                  <div className="mt-1 relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                      </svg>
+                    </div>
                     <Input
                       id="email"
                       name="email"
@@ -85,16 +106,21 @@ export default function LoginPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                      className="block w-full pl-10 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm text-white"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <Label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  <Label htmlFor="password" className="block text-sm font-medium text-gray-300">
                     Password
                   </Label>
-                  <div className="mt-1">
+                  <div className="mt-1 relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
                     <Input
                       id="password"
                       name="password"
@@ -103,7 +129,7 @@ export default function LoginPage() {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                      className="block w-full pl-10 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 placeholder-gray-500 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm text-white"
                     />
                   </div>
                 </div>
@@ -114,17 +140,17 @@ export default function LoginPage() {
                       id="remember-me"
                       name="remember-me"
                       type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="h-4 w-4 rounded border-gray-700 text-blue-600 focus:ring-blue-500 bg-gray-800"
                     />
-                    <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
+                    <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-300">
                       Remember me
                     </label>
                   </div>
 
                   <div className="text-sm">
-                    <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
+                    <Link to="/forgot-password" className="font-medium text-blue-400 hover:text-blue-300">
                       Forgot your password?
-                    </a>
+                    </Link>
                   </div>
                 </div>
 
@@ -132,7 +158,7 @@ export default function LoginPage() {
                   <Button
                     type="submit"
                     disabled={isLoading}
-                    className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    className="flex w-full justify-center rounded-md border border-transparent bg-gradient-to-r from-blue-600 to-blue-500 py-3 px-4 text-sm font-medium text-white shadow-lg hover:from-blue-700 hover:to-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200"
                   >
                     {isLoading ? (
                       <>
@@ -149,59 +175,62 @@ export default function LoginPage() {
               <div className="mt-6">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300" />
+                    <div className="w-full border-t border-gray-700" />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="bg-gray-50 px-2 text-gray-500">Or continue with</span>
+                    <span className="px-2 bg-gray-900 text-gray-400">Or continue as</span>
                   </div>
                 </div>
 
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                  <div>
-                    <Button
-                      onClick={handleGoogleSignIn}
-                      disabled={isLoading}
-                      className="flex w-full items-center justify-center gap-3 rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-                    >
-                      <img
-                        className="h-5 w-5"
-                        src="https://www.svgrepo.com/show/475656/google-color.svg"
-                        alt="Google logo"
-                      />
-                      <span>Google</span>
-                    </Button>
-                  </div>
-                  <div>
-                    <Button
-                      onClick={handleGuestRecruiterLogin}
-                      disabled={isGuestLoading}
-                      className="flex w-full items-center justify-center gap-2 rounded-md border border-transparent bg-green-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700"
-                    >
-                      {isGuestLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Loading...
-                        </>
-                      ) : (
-                        <>
-                          <span className="mr-1">👨‍💼</span>
-                          <span>Try as Recruiter</span>
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                <div className="mt-6 grid grid-cols-2 gap-4">
+                  <Button
+                    onClick={handleGuestCandidate}
+                    disabled={isLoading}
+                    variant="outline"
+                    className="w-full rounded-md border border-gray-700 bg-gray-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+                  >
+                    Guest Candidate
+                  </Button>
+                  <Button
+                    onClick={handleGuestRecruiter}
+                    disabled={isLoading}
+                    variant="outline"
+                    className="w-full rounded-md border border-gray-700 bg-gray-800 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+                  >
+                    Guest Recruiter
+                  </Button>
                 </div>
+              </div>
+
+              <div className="mt-6 text-center">
+                <p className="text-sm text-gray-400">
+                  Don't have an account?{' '}
+                  <Link to="/signup" className="font-medium text-blue-400 hover:text-blue-300">
+                    Sign up
+                  </Link>
+                </p>
               </div>
             </div>
           </div>
         </div>
       </div>
       <div className="hidden lg:block relative w-0 flex-1">
-        <img
-          className="absolute inset-0 h-full w-full object-cover"
-          src="https://images.unsplash.com/photo-1505904267569-f02eaeb45a4c?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1908&q=80"
-          alt="Login page background"
-        />
+        <div className="absolute inset-0 h-full w-full">
+          <img
+            className="h-full w-full object-cover"
+            src="https://images.unsplash.com/photo-1600880292203-757bb62b4baf?ixlib=rb-1.2.1&auto=format&fit=crop&w=1908&q=80"
+            alt="Professional networking"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-90" />
+        </div>
+        <div className="absolute bottom-10 left-10 right-10 text-white">
+          <blockquote className="space-y-2">
+            <p className="text-lg">
+              "The best way to predict the future is to create it."
+            </p>
+            <footer className="text-sm text-gray-300">— Peter Drucker</footer>
+          </blockquote>
+        </div>
       </div>
     </div>
   );

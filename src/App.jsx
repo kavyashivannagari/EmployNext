@@ -2,7 +2,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { ThemeProvider } from "./components/themeProvider";
 import { auth, getUserRole } from './lib/firebase';
 import { useEffect, useState } from 'react';
-import LandingPage from "./pages/LandingPage";
+import LandingPage from "./Pages/LandingPage.jsx";
 import CandidateDashboard from './pages/CandidateDashboard';
 import CandidateProfile from './components/CandidateProfile';
 import RecruiterDashboard from './pages/RecruiterDashboard';
@@ -17,7 +17,6 @@ import SavedJobs from './Pages/SaveJob';
 import MyJobs from './Pages/MyJob';
 import Onboarding from './pages/Onboarding';
 import RecruiterProfile from './components/RecruiterProfile';
-import RecruiterGuestLogin from './components/RecruiterGuestLogin';
 import { Loader2 } from 'lucide-react';
 
 function App() {
@@ -25,31 +24,41 @@ function App() {
   const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isGuestUser, setIsGuestUser] = useState(false);
-
+  const [guestRole, setGuestRole] = useState(null);
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      setLoading(true);
       if (user) {
         setUser(user);
         
-        // Check if user is a guest recruiter
-        const isGuest = user.email === (import.meta.env.VITE_GUEST_EMAIL || 'guest-recruiter@employnext.com');
-        setIsGuestUser(isGuest);
-        
-        try {
-          const role = await getUserRole(user.uid);
-          setUserRole(role);
-        } catch (error) {
-          console.error("Error fetching user role:", error);
-          setUserRole(null);
+        // Check for guest status from sessionStorage
+        const guestStatus = sessionStorage.getItem('isGuest');
+        if (guestStatus) {
+          setIsGuestUser(true);
+          setGuestRole(guestStatus);
+          // Fix: Make sure userRole is properly set for guest users
+          setUserRole(guestStatus); // This ensures userRole is 'recruiter' or 'candidate'
+        } else {
+          try {
+            const role = await getUserRole(user.uid);
+            setUserRole(role || 'candidate'); // Default to candidate if role is null
+            setIsGuestUser(false);
+            setGuestRole(null);
+          } catch (error) {
+            console.error("Error fetching user role:", error);
+            setUserRole('candidate'); // Fallback to candidate
+          }
         }
       } else {
         setUser(null);
         setUserRole(null);
         setIsGuestUser(false);
+        setGuestRole(null);
+        sessionStorage.removeItem('isGuest');
       }
       setLoading(false);
     });
-
+  
     return () => unsubscribe();
   }, []);
 
@@ -61,7 +70,13 @@ function App() {
     {
       path: "/login",
       element: user ? (
-        userRole === 'recruiter' ? (
+        isGuestUser ? (
+          guestRole === 'recruiter' ? (
+            <Navigate to="/recruiter-dashboard" replace />
+          ) : (
+            <Navigate to="/candidate-dashboard" replace />
+          )
+        ) : userRole === 'recruiter' ? (
           <Navigate to="/recruiter-dashboard" replace />
         ) : (
           <Navigate to="/candidate-dashboard" replace />
@@ -71,33 +86,13 @@ function App() {
       ),
     },
     {
-      path: '/recruiter-guest-login',
-      element: user ? (
-        userRole === 'recruiter' ? (
-          <Navigate to="/recruiter-dashboard" replace />
-        ) : (
-          <Navigate to="/candidate-dashboard" replace />
-        )
-      ) : (
-        <RecruiterGuestLogin />
-      ),
-    },
-    {
       path: '/signup',
-      element: user ? (
-        userRole === 'recruiter' ? (
-          <Navigate to="/recruiter-dashboard" replace />
-        ) : (
-          <Navigate to="/candidate-dashboard" replace />
-        )
-      ) : (
-        <SignupPage />
-      ),
+      element: user ? <Navigate to="/" replace /> : <SignupPage />,
     },
     {
       path: '/onboarding',
       element: (
-        <ProtectedRoute user={user}>
+        <ProtectedRoute user={user} isGuest={isGuestUser}>
           <Onboarding />
         </ProtectedRoute>
       ),
@@ -106,15 +101,23 @@ function App() {
     {
       path: '/candidate-dashboard',
       element: (
-        <RoleBasedRoute allowedRoles={['candidate']} userRole={userRole}>
-          <CandidateDashboard />
+        <RoleBasedRoute 
+          allowedRoles={['candidate', 'guest']} 
+          userRole={isGuestUser ? guestRole : userRole}
+          isGuest={isGuestUser && guestRole === 'candidate'}
+        >
+          <CandidateDashboard isGuest={isGuestUser && guestRole === 'candidate'} />
         </RoleBasedRoute>
       ),
     },
     {
       path: '/candidate-profile',
       element: (
-        <RoleBasedRoute allowedRoles={['candidate']} userRole={userRole}>
+        <RoleBasedRoute 
+          allowedRoles={['candidate']} 
+          userRole={isGuestUser ? guestRole : userRole}
+          isGuest={false}
+        >
           <CandidateProfile />
         </RoleBasedRoute>
       ),
@@ -123,16 +126,24 @@ function App() {
     {
       path: '/recruiter-dashboard',
       element: (
-        <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
-          <RecruiterDashboard isGuest={isGuestUser} />
+        <RoleBasedRoute 
+          allowedRoles={['recruiter']} 
+          userRole={userRole}          
+          isGuest={isGuestUser}
+        >
+          <RecruiterDashboard isGuest={isGuestUser && userRole === 'recruiter'} />
         </RoleBasedRoute>
       ),
     },
     {
       path: '/recruiter-profile',
       element: (
-        <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
-          <RecruiterProfile isGuest={isGuestUser} />
+        <RoleBasedRoute 
+          allowedRoles={['recruiter']} 
+          userRole={isGuestUser ? guestRole : userRole}
+          isGuest={false}
+        >
+          <RecruiterProfile />
         </RoleBasedRoute>
       ),
     },
@@ -148,15 +159,23 @@ function App() {
     {
       path: '/postjob',
       element: (
-        <RoleBasedRoute allowedRoles={['recruiter']} userRole={userRole}>
-          <PostJob isGuest={isGuestUser} />
+        <RoleBasedRoute 
+          allowedRoles={['recruiter']} 
+          userRole={isGuestUser ? guestRole : userRole}
+          isGuest={false}
+        >
+          <PostJob />
         </RoleBasedRoute>
       ),
     },
     {
       path: '/savedjobs',
       element: (
-        <RoleBasedRoute allowedRoles={['candidate']} userRole={userRole}>
+        <RoleBasedRoute 
+          allowedRoles={['candidate']} 
+          userRole={isGuestUser ? guestRole : userRole}
+          isGuest={false}
+        >
           <SavedJobs />
         </RoleBasedRoute>
       ),
@@ -164,8 +183,8 @@ function App() {
     {
       path: '/myjobs',
       element: (
-        <ProtectedRoute user={user}>
-          <MyJobs isGuest={isGuestUser} />
+        <ProtectedRoute user={user} isGuest={isGuestUser}>
+          <MyJobs isGuest={isGuestUser && guestRole === 'recruiter'} />
         </ProtectedRoute>
       ),
     },

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { auth, getUserProfile, getJobsByRecruiter, createUserProfile, deleteJob } from '../lib/firebase';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -64,7 +64,7 @@ const JobItem = ({ job, onDelete, isGuest }) => {
   );
 };
 
-const RecruiterDashboard = ({ isGuest = false }) => {
+const RecruiterDashboard = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,12 +72,57 @@ const RecruiterDashboard = ({ isGuest = false }) => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [alert, setAlert] = useState(null);
   const location = useLocation();
+  const navigate = useNavigate();
+  const isGuest = location.state?.isGuest || sessionStorage.getItem('isGuest') === 'recruiter';
 
   useEffect(() => {
     const loadUserData = async () => {
       try {
+        if (isGuest) {
+          // Load demo data for guest recruiters
+          setUserProfile({
+            fullName: "Guest Recruiter",
+            companyName: "Demo Company",
+            position: "HR Manager",
+            location: "Remote",
+            industry: "Technology",
+            companyWebsite: "",
+            companyDescription: "Guest account for demo purposes"
+          });
+          
+          setJobs([
+            {
+              id: 'demo1',
+              title: 'Senior Frontend Developer',
+              companyName: 'Demo Company',
+              location: 'Remote',
+              type: 'Full-time',
+              minSalary: 90000,
+              maxSalary: 120000,
+              postedAt: { seconds: Date.now() / 1000 - 86400 }, // 1 day ago
+              applications: Array(5).fill({ status: 'pending' })
+            },
+            {
+              id: 'demo2',
+              title: 'UX Designer',
+              companyName: 'Demo Company',
+              location: 'Hybrid',
+              type: 'Contract',
+              minSalary: 70000,
+              maxSalary: 90000,
+              postedAt: { seconds: Date.now() / 1000 - 172800 }, // 2 days ago
+              applications: Array(3).fill({ status: 'pending' }).concat({ status: 'interview' })
+            }
+          ]);
+          setLoading(false);
+          return;
+        }
+        
         const user = auth.currentUser;
-        if (!user) return;
+        if (!user) {
+          navigate('/login');
+          return;
+        }
 
         try {
           const profileData = await getUserProfile(user.uid);
@@ -86,12 +131,12 @@ const RecruiterDashboard = ({ isGuest = false }) => {
           if (error.message === "Profile not found") {
             const defaultProfile = {
               fullName: user.displayName || '',
-              companyName: isGuest ? "Demo Company" : '',
-              position: isGuest ? "HR Manager" : '',
-              location: isGuest ? "Remote" : '',
-              industry: isGuest ? "Technology" : '',
+              companyName: '',
+              position: '',
+              location: '',
+              industry: '',
               companyWebsite: '',
-              companyDescription: isGuest ? "Guest account for demo purposes" : ''
+              companyDescription: ''
             };
             await createUserProfile(user.uid, defaultProfile);
             setUserProfile(defaultProfile);
@@ -111,7 +156,7 @@ const RecruiterDashboard = ({ isGuest = false }) => {
     };
 
     loadUserData();
-  }, [location.key, isGuest]);
+  }, [location.key, isGuest, navigate]);
 
   const openPostJobModal = () => {
     if (isGuest) {
@@ -142,25 +187,30 @@ const RecruiterDashboard = ({ isGuest = false }) => {
       if (isGuest) {
         throw new Error("Guest users cannot delete jobs");
       }
-
+  
       const user = auth.currentUser;
       if (!user) {
         throw new Error("Authentication required");
       }
-
+  
       if (!window.confirm("Are you sure you want to delete this job posting?")) {
         return;
       }
-
+  
       await deleteJob(jobId);
       
-      setJobs(jobs.filter(job => job.id !== jobId));
-      setAlert({ type: 'success', message: 'Job deleted successfully' });
+      // Update state immediately
+      setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
       
+      setAlert({ type: 'success', message: 'Job deleted successfully' });
       setTimeout(() => setAlert(null), 3000);
     } catch (error) {
       console.error('Error deleting job:', error);
-      setAlert({ type: 'error', message: error.message || 'Failed to delete job' });
+      let errorMessage = error.message;
+      if (error.code === 'permission-denied') {
+        errorMessage = "You don't have permission to delete this job";
+      }
+      setAlert({ type: 'error', message: errorMessage });
     }
   };
 
@@ -184,7 +234,8 @@ const RecruiterDashboard = ({ isGuest = false }) => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header user={auth.currentUser} userRole="recruiter" />
+     <Header user={auth.currentUser} userRole="recruiter" isGuest={isGuest} />
+
       
       <main className="flex-grow py-6 px-4 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto">
@@ -197,7 +248,10 @@ const RecruiterDashboard = ({ isGuest = false }) => {
           {isGuest && (
             <Alert className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400">
               <AlertDescription className="text-yellow-800 dark:text-yellow-300">
-                You are using a guest account. Some features are limited.
+                You are using a guest account. Some features are limited. {' '}
+                <Link to="/signup" className="font-semibold hover:underline">
+                  Sign up
+                </Link> for full access.
               </AlertDescription>
             </Alert>
           )}

@@ -7,7 +7,8 @@ import {
   updateProfile as updateAuthProfile,
   GoogleAuthProvider,
   signInWithPopup,
-  fetchSignInMethodsForEmail
+  // fetchSignInMethodsForEmail,
+  signInAnonymously
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -17,13 +18,14 @@ import {
   collection,
   addDoc,
   updateDoc,
-  deleteDoc,
+  // deleteDoc,
   query,
   where,
   getDocs,
   serverTimestamp,
   increment,
-  runTransaction
+  runTransaction,
+  writeBatch
 } from "firebase/firestore";
 import axios from 'axios';
 
@@ -53,7 +55,6 @@ export const cloudinaryConfig = {
 // Cloudinary Resume Upload Function
 export const uploadResume = async (userId, resumeFile) => {
   try {
-    // Validate file type
     const validTypes = [
       'application/pdf', 
       'application/msword', 
@@ -64,7 +65,6 @@ export const uploadResume = async (userId, resumeFile) => {
       throw new Error('Only PDF, DOC, and DOCX files are allowed');
     }
 
-    // Validate file size (10MB max)
     const maxSize = 10 * 1024 * 1024;
     if (resumeFile.size > maxSize) {
       throw new Error('File size exceeds 10MB limit');
@@ -93,8 +93,10 @@ export const uploadResume = async (userId, resumeFile) => {
     );
 
     if (response.data && response.data.secure_url) {
-      // Update user profile with the new resume URL
-      await updateUserProfile(userId, { resumeUrl: response.data.secure_url });
+      await updateUserProfile(userId, { 
+        resumeUrl: response.data.secure_url,
+        resumeName: resumeFile.name 
+      });
       return response.data.secure_url;
     }
 
@@ -208,6 +210,7 @@ export const signInWithGoogle = async () => {
 export const logoutUser = async () => {
   try {
     await signOut(auth);
+    sessionStorage.removeItem('isGuest');
     return true;
   } catch (error) {
     console.error("Error in logout:", error);
@@ -215,11 +218,124 @@ export const logoutUser = async () => {
   }
 };
 
+// Guest User Functions
+export const loginAsGuestCandidate = async () => {
+  try {
+    const { user } = await signInAnonymously(auth);
+    sessionStorage.setItem('isGuest', 'candidate');
+    
+    // Create minimal guest profile
+    await setDoc(doc(db, "userProfiles", user.uid), {
+      isGuest: true,
+      fullName: "Guest Candidate",
+      title: "Software Developer",
+      location: "San Francisco, CA",
+      skills: "JavaScript, React, Node.js",
+      education: "bachelors",
+      bio: "Guest account for demo purposes",
+      experience: "3 years of experience in web development",
+      createdAt: serverTimestamp()
+    });
+    
+    await setDoc(doc(db, "users", user.uid), {
+      role: "candidate",
+      isGuest: true,
+      createdAt: serverTimestamp()
+    });
+    
+    return user;
+  } catch (error) {
+    console.error("Guest candidate login failed:", error);
+    throw new Error("Unable to access guest account. Please try again later.");
+  }
+};
+
+export const loginAsGuestRecruiter = async () => {
+  try {
+    const { user } = await signInAnonymously(auth);
+    sessionStorage.setItem('isGuest', 'recruiter');
+    
+    // Create guest recruiter profile
+    await setDoc(doc(db, "userProfiles", user.uid), {
+      isGuest: true,
+      fullName: "Guest Recruiter",
+      companyName: "Demo Company",
+      position: "HR Manager",
+      location: "Remote",
+      industry: "Technology",
+      companyWebsite: "",
+      companyDescription: "Guest account for demo purposes",
+      createdAt: serverTimestamp()
+    });
+    
+    await setDoc(doc(db, "users", user.uid), {
+      role: "recruiter",
+      isGuest: true,
+      createdAt: serverTimestamp()
+    });
+    
+    // Create demo jobs
+    await createDemoJobsForGuest(user.uid);
+    
+    return user;
+  } catch (error) {
+    console.error("Guest recruiter login failed:", error);
+    throw new Error("Unable to access guest account. Please try again later.");
+  }
+};
+
+async function createDemoJobsForGuest(recruiterId) {
+  try {
+    const demoJobs = [
+      {
+        title: "Senior Frontend Developer",
+        companyName: "Demo Company",
+        location: "Remote",
+        type: "Full-time",
+        minSalary: 90000,
+        maxSalary: 120000,
+        description: "We are looking for an experienced frontend developer to join our team.",
+        requirements: "5+ years of experience with React and TypeScript",
+        recruiterId: recruiterId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        applicationCount: 0,
+        status: "active"
+      },
+      {
+        title: "UX Designer",
+        companyName: "Demo Company",
+        location: "Hybrid",
+        type: "Contract",
+        minSalary: 70000,
+        maxSalary: 90000,
+        description: "Join our design team to create beautiful user experiences.",
+        requirements: "Portfolio required, 3+ years of UX design experience",
+        recruiterId: recruiterId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        applicationCount: 0,
+        status: "active"
+      }
+    ];
+
+    const batch = writeBatch(db);
+    demoJobs.forEach(job => {
+      const jobRef = doc(collection(db, "jobs"));
+      batch.set(jobRef, job);
+    });
+    await batch.commit();
+  } catch (error) {
+    console.error("Error creating demo jobs:", error);
+  }
+}
+
 // User Profile Functions
 export const createUserProfile = async (uid, data) => {
   try {
     await setDoc(doc(db, "userProfiles", uid), {
       ...data,
+      isGuest: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -239,7 +355,10 @@ export const getUserProfile = async (uid) => {
       throw new Error("Profile not found");
     }
     
-    return docSnap.data();
+    return {
+      isGuest: docSnap.data().isGuest || false,
+      ...docSnap.data()
+    };
   } catch (error) {
     console.error("Error getting user profile:", error);
     throw error;
@@ -251,6 +370,11 @@ export const updateUserProfile = async (uid, data) => {
     const user = checkUserAuth();
     if (user.uid !== uid) {
       throw new Error("You can only update your own profile");
+    }
+
+    const profile = await getUserProfile(uid);
+    if (profile.isGuest) {
+      throw new Error("Guest profiles cannot be updated");
     }
 
     const userRef = doc(db, "userProfiles", uid);
@@ -270,6 +394,12 @@ export const updateUserProfile = async (uid, data) => {
 export const createJob = async (jobData) => {
   try {
     const user = checkUserAuth();
+    const profile = await getUserProfile(user.uid);
+    
+    if (profile.isGuest) {
+      throw new Error("Guest accounts cannot create jobs");
+    }
+
     const userRole = await getUserRole(user.uid);
     if (userRole !== "recruiter") {
       throw new Error("Only recruiters can create jobs");
@@ -338,20 +468,34 @@ export const deleteJob = async (jobId) => {
       throw new Error("You can only delete your own job postings");
     }
     
-    await deleteDoc(jobRef);
-    
+    // Get all applications for this job first
     const applicationsQuery = query(
       collection(db, "applications"),
       where("jobId", "==", jobId)
     );
-    
     const applicationsSnapshot = await getDocs(applicationsQuery);
-    const deletePromises = applicationsSnapshot.docs.map(doc => deleteDoc(doc.ref));
-    await Promise.all(deletePromises);
+    
+    const batch = writeBatch(db);
+    
+    // Delete all applications
+    applicationsSnapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    
+    // Delete the job
+    batch.delete(jobRef);
+    
+    // Commit the batch
+    await batch.commit();
     
     return true;
   } catch (error) {
     console.error('Error deleting job:', error);
+    
+    // Provide more user-friendly error messages
+    if (error.code === 'permission-denied') {
+      throw new Error("You don't have permission to delete this job. Please make sure you're the job poster.");
+    }
     throw error;
   }
 };
@@ -526,6 +670,12 @@ export const applyToJob = async (userId, jobId, applicationData = {}) => {
       throw new Error("Authentication mismatch");
     }
 
+    // Check if user is guest
+    const profile = await getUserProfile(userId);
+    if (profile.isGuest) {
+      throw new Error("Guest accounts cannot apply to jobs. Please sign up for a full account.");
+    }
+
     const applicationsRef = collection(db, "applications");
     const q = query(applicationsRef, 
       where("userId", "==", userId), 
@@ -611,47 +761,5 @@ export const getUserRole = async (uid) => {
     return null;
   }
 };
-
-// Add this to your existing firebase.js
-
-export const loginAsRecruiterGuest = async () => {
-  try {
-    const guestEmail = import.meta.env.VITE_GUEST_EMAIL || 'guest-recruiter@employnext.com';
-    const guestPassword = import.meta.env.VITE_GUEST_PASSWORD || 'Guest@1234';
-
-    try {
-      // Try to sign in first
-      const userCredential = await signInWithEmailAndPassword(auth, guestEmail, guestPassword);
-      return userCredential.user;
-    } catch (signInError) {
-      // If account doesn't exist or wrong password, create it
-      if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/wrong-password') {
-        const userCredential = await createUserWithEmailAndPassword(auth, guestEmail, guestPassword);
-        const user = userCredential.user;
-        
-        await updateAuthProfile(user, { displayName: "Guest Recruiter" });
-        await setUserRole(user.uid, "recruiter");
-        
-        await createUserProfile(user.uid, {
-          fullName: "Guest Recruiter",
-          companyName: "Demo Company",
-          position: "HR Manager",
-          location: "Remote",
-          industry: "Technology",
-          companyWebsite: "",
-          companyDescription: "Guest account for demo purposes",
-          resumeUrl: ""
-        });
-        
-        return user;
-      }
-      throw signInError;
-    }
-  } catch (error) {
-    console.error("Guest recruiter login failed:", error);
-    throw error;
-  }
-};
-
 
 export { auth, db, googleProvider };

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { auth, getUserProfile, getUserApplications, getUserRole } from '../lib/firebase';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FileText, GraduationCap } from 'lucide-react';
 
 const ApplicationItem = ({ application }) => {
@@ -49,17 +50,6 @@ const educationLabels = {
   'other': 'Other'
 };
 
-const isProfileIncomplete = (profile) => {
-  if (!profile) return true;
-  return (
-    !profile.fullName ||
-    !profile.title ||
-    !profile.location ||
-    !profile.skills ||
-    !profile.education
-  );
-};
-console.log(isProfileIncomplete)
 const CandidateDashboard = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [applications, setApplications] = useState([]);
@@ -67,10 +57,58 @@ const CandidateDashboard = () => {
   const [error, setError] = useState(null);
   const [userRole, setUserRole] = useState('candidate');
   const navigate = useNavigate();
+  const location = useLocation();
+  const isGuest = location.state?.isGuest || sessionStorage.getItem('isGuest') === 'candidate';
 
   useEffect(() => {
     const loadUserData = async () => {
       try {
+        if (isGuest) {
+          // Load demo data for guest candidates
+          setUserProfile({
+            fullName: "Guest Candidate",
+            title: "Software Developer",
+            location: "San Francisco, CA",
+            skills: "JavaScript, React, Node.js",
+            education: "bachelors",
+            bio: "Guest account for demo purposes",
+            experience: "3 years of experience in web development",
+            resumeUrl: "",
+            resumeName: ""
+          });
+          
+          setApplications([
+            {
+              id: 'demo1',
+              status: 'pending',
+              appliedAt: { seconds: Date.now() / 1000 - 86400 }, // 1 day ago
+              job: {
+                title: 'Frontend Developer',
+                company: 'Tech Corp',
+                location: 'Remote',
+                type: 'Full-time',
+                minSalary: 80000,
+                maxSalary: 100000
+              }
+            },
+            {
+              id: 'demo2',
+              status: 'interview',
+              appliedAt: { seconds: Date.now() / 1000 - 172800 }, // 2 days ago
+              job: {
+                title: 'UI/UX Designer',
+                company: 'Design Studio',
+                location: 'New York, NY',
+                type: 'Contract',
+                minSalary: 70000,
+                maxSalary: 90000
+              }
+            }
+          ]);
+          setLoading(false);
+          return;
+        }
+        
         const user = auth.currentUser;
         if (!user) {
           navigate('/login');
@@ -88,7 +126,6 @@ const CandidateDashboard = () => {
         setUserRole(role);
         setLoading(false);
         
-        // SweetAlert has been removed
       } catch (error) {
         console.error('Error loading user data:', error);
         setError(error.message.includes('permission') 
@@ -99,7 +136,7 @@ const CandidateDashboard = () => {
     };
 
     loadUserData();
-  }, [navigate]);
+  }, [navigate, isGuest]);
 
   if (loading) {
     return (
@@ -142,6 +179,17 @@ const CandidateDashboard = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Header user={auth.currentUser} userRole={userRole} />
+      
+      {isGuest && (
+        <Alert className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400">
+          <AlertDescription className="text-yellow-800 dark:text-yellow-300">
+            You are using a guest account. Some features are limited. {' '}
+            <Link to="/signup" className="font-semibold hover:underline">
+              Sign up
+            </Link> for full access.
+          </AlertDescription>
+        </Alert>
+      )}
       
       <main className="flex-grow py-6 px-4 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto">
@@ -217,7 +265,6 @@ const CandidateDashboard = () => {
                   </div>
                   
                   <div className="mt-4">
-                    {/* Updated Link path to match router configuration */}
                     <Link to="/candidate-profile" className="text-blue-600 text-sm hover:underline">
                       Edit Profile
                     </Link>

@@ -26,7 +26,7 @@ import { useEffect } from 'react';
 const PostJobModal = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [ setUserProfile] = useState(null);
+  const [userProfile, setUserProfile] = useState(null); // Fixed state declaration
   const [formData, setFormData] = useState({
     title: '',
     location: '',
@@ -35,26 +35,30 @@ const PostJobModal = ({ isOpen, onClose }) => {
     maxSalary: '',
     description: '',
     companyUrl: '',
-    companyName: '', // Added company name field
+    companyName: '',
     requirements: [''],
     benefits: [''],
   });
-
+console.log(userProfile)
   // Fetch user profile to get company name
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchUserProfile = async () => {
       try {
         const user = auth.currentUser;
         if (user) {
           const profile = await getUserProfile(user.uid);
-          setUserProfile(profile);
-          
-          // Pre-fill company name if available
-          if (profile?.companyName) {
-            setFormData(prev => ({
-              ...prev,
-              companyName: profile.companyName
-            }));
+          if (isMounted) {
+            setUserProfile(profile);
+            
+            // Pre-fill company name if available
+            if (profile?.companyName) {
+              setFormData(prev => ({
+                ...prev,
+                companyName: profile.companyName
+              }));
+            }
           }
         }
       } catch (error) {
@@ -63,7 +67,11 @@ const PostJobModal = ({ isOpen, onClose }) => {
     };
     
     fetchUserProfile();
-  }, []);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [auth.currentUser]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -139,7 +147,7 @@ const PostJobModal = ({ isOpen, onClose }) => {
       new URL(string);
       return true;
     } catch (err) {
-      console.log(err)
+      console.log(err);
       return false;
     }
   };
@@ -184,7 +192,7 @@ const PostJobModal = ({ isOpen, onClose }) => {
         requirements: filteredRequirements,
         benefits: filteredBenefits,
         recruiterId: user.uid,
-        companyName: formData.companyName, // Use the form input value
+        companyName: formData.companyName,
         postedAt: new Date(),
         applications: [],
         status: 'active'
@@ -192,7 +200,7 @@ const PostJobModal = ({ isOpen, onClose }) => {
 
       await createJob(jobData);
       onClose();
-      navigate('/myjobs'); // Navigate to My Jobs page after posting
+      navigate('/recruiter-dashboard');
     } catch (error) {
       console.error('Error creating job:', error);
       alert('Failed to post job. Please try again.');
@@ -225,7 +233,6 @@ const PostJobModal = ({ isOpen, onClose }) => {
               />
             </div>
 
-            {/* Added Company Name field */}
             <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="companyName">Company Name *</Label>
               <Input
