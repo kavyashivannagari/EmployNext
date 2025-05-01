@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 
-export default function SignupPage({ onSuccess }) {
+export default function SignupPage() {
   const navigate = useNavigate()
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -25,20 +25,18 @@ export default function SignupPage({ onSuccess }) {
   const handleSignup = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-
+  
     try {
       if (!role || role === "I am a.." || role === "Select Role") {
         throw new Error("Please select a valid role");
       }
-
+  
       await registerWithEmailAndPasswordWithRole(name, email, password, role);
-
+  
       showNotification('Registration successful!', 'Please log in with your credentials.', 'success');
-      if (onSuccess) {
-        onSuccess();
-        navigate('/login')
-      }
-
+      // Remove the onSuccess callback and directly navigate to login
+      navigate('/login');
+  
     } catch (error) {
       console.error("Registration error:", error);
       showNotification('Registration failed', error.message.replace("Firebase: ", ""));

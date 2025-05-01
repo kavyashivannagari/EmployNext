@@ -1,16 +1,9 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 
-const RoleBasedRoute = ({ children, allowedRoles, userRole, isGuest }) => {
-  const location = useLocation();
-
-  if (isGuest && allowedRoles.includes('guest')) {
-    return children;
-  }
-
+const RoleBasedRoute = ({ allowedRoles, userRole, children }) => {
   if (!allowedRoles.includes(userRole)) {
-    return <Navigate to="/" state={{ from: location }} replace />;
+    return <Navigate to="/" replace />;
   }
-
   return children;
 };
 

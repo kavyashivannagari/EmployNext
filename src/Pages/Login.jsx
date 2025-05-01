@@ -15,11 +15,22 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-
+  
     try {
       const userCredential = await loginWithEmailAndPassword(email, password);
-      const user = userCredential;
+      const user = userCredential.user;
+      
+      if (!user || !user.uid) {
+        throw new Error("User authentication failed - no UID received");
+      }
+      
       const role = await getUserRole(user.uid);
+      
+      if (!role) {
+        throw new Error("User role not found");
+      }
+  
+      // Redirect based on role
       if (role === 'recruiter') {
         navigate('/recruiter-dashboard', { replace: true });
       } else {
@@ -93,7 +104,7 @@ const handleGuestRecruiter = async () => {
                     Email address
                   </Label>
                   <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <div className="absolute inset-y-0 right-1 pl-3 flex items-center pointer-events-none">
                       <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                         <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
@@ -117,7 +128,7 @@ const handleGuestRecruiter = async () => {
                     Password
                   </Label>
                   <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <div className="absolute inset-y-0 right-1 pl-3 flex items-center pointer-events-none">
                       <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                       </svg>

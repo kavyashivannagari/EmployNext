@@ -40,7 +40,17 @@ const JobListing = () => {
     const fetchJobs = async () => {
       try {
         const jobsData = await getJobs();
-        setJobs(jobsData);
+        // Normalize job data to ensure requirements is always an array
+        const normalizedJobs = jobsData.map(job => ({
+          ...job,
+          requirements: Array.isArray(job.requirements) 
+            ? job.requirements.filter(r => r) // Remove empty items
+            : job.requirements 
+              ? [job.requirements.toString()] // Convert to array if it's a single value
+              : [] // Default to empty array
+        }));
+        
+        setJobs(normalizedJobs);
         
         if (user) {
           try {
@@ -54,7 +64,7 @@ const JobListing = () => {
             });
             
             const savedStatuses = {};
-            for (const job of jobsData) {
+            for (const job of normalizedJobs) {
               try {
                 const isSaved = await isJobSaved(user.uid, job.id);
                 savedStatuses[job.id] = isSaved;
@@ -148,40 +158,67 @@ const JobListing = () => {
     setApplyModalOpen(true);
   };
 
-  const handleApplicationSubmit = async (resumeFile) => {
+  const handleApplicationSubmit = async (resumeFile, coverLetter = '') => {
     try {
+      setLoading(true);
+      
+      if (!user) {
+        navigate('/login');
+        return;
+      }
+  
+      // Verify user profile
+      const profile = await getUserProfile(user.uid);
+      if (profile?.isGuest) {
+        throw new Error("Guest accounts cannot apply to jobs. Please sign up for a full account.");
+      }
+  
       let resumeUrl = profile?.resumeUrl;
       
+      // Handle resume upload
       if (resumeFile) {
-        console.log('Uploading file:', resumeFile.name, resumeFile.type);
-        resumeUrl = await uploadResume(user.uid, resumeFile);
-        console.log('Upload successful, URL:', resumeUrl);
+        try {
+          resumeUrl = await uploadResume(user.uid, resumeFile);
+        } catch (uploadError) {
+          console.error('Resume upload failed:', uploadError);
+          throw new Error('Failed to upload resume. Please try again.');
+        }
       }
-      
+  
       if (!resumeUrl) {
-        throw new Error('Resume is required to apply');
+        throw new Error('A resume is required to apply for this position');
       }
-      
-      const applicationId = await applyToJob(user.uid, selectedJobId, { resumeUrl });
+  
+      // Submit application
+      await applyToJob(user.uid, selectedJobId, {
+        resumeUrl,
+        candidateName: profile?.fullName || user.displayName || 'Anonymous',
+        coverLetter
+      });
+  
+      // Update UI
       setAppliedJobIds(prev => ({ ...prev, [selectedJobId]: true }));
-      setApplicationIds(prev => ({ ...prev, [selectedJobId]: applicationId }));
       setAlert({ type: 'success', message: 'Application submitted successfully!' });
       setApplyModalOpen(false);
-
+      
+      // Update jobs list
       setJobs(jobs.map(job => 
         job.id === selectedJobId 
           ? { ...job, applicationCount: (job.applicationCount || 0) + 1 }
           : job
       ));
-    } catch (err) {
-      console.error("Error applying to job:", err);
-      setAlert({ 
-        type: 'error', 
-        message: err.message || 'Failed to submit application. Please check your resume upload or permissions.'
+    } catch (error) {
+      console.error("Application error:", error);
+      setAlert({
+        type: 'error',
+        message: error.code === 'permission-denied'
+          ? 'You do not have permission to apply. Please ensure you have a candidate account.'
+          : error.message || 'Failed to submit application. Please try again.'
       });
+    } finally {
+      setLoading(false);
     }
   };
-
   const handleCancelApplication = async (jobId) => {
     try {
       const applicationId = applicationIds[jobId];
@@ -335,12 +372,12 @@ const JobListing = () => {
                         </p>
                         
                         <div className="flex flex-wrap gap-2 mb-4">
-                          {job.requirements?.slice(0, 3).map((req, index) => (
+                          {job.requirements.slice(0, 3).map((req, index) => (
                             <span key={index} className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-xs">
                               {req}
                             </span>
                           ))}
-                          {job.requirements?.length > 3 && (
+                          {job.requirements.length > 3 && (
                             <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded text-xs">
                               +{job.requirements.length - 3} more
                             </span>

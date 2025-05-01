@@ -71,43 +71,59 @@ const CandidateProfile = () => {
     e.preventDefault();
     setSaving(true);
     setError(null);
-
+    setSuccess(false);
+  
     try {
       const user = auth.currentUser;
       if (!user) {
-        setError("You must be logged in to save your profile");
+        navigate('/login');
         return;
       }
-
-      // Convert skills string to array or keep as string based on your backend requirements
-      let skillsData;
-      if (skills.includes(',')) {
-        skillsData = skills.split(',').map(skill => skill.trim());
-      } else {
-        skillsData = skills.trim();
-      }
-
+  
+      // Prepare skills data
+      const skillsData = skills
+        .split(',')
+        .map(skill => skill.trim())
+        .filter(skill => skill.length > 0);
+  
       const profileData = {
-        fullName,
-        title,
-        location,
+        fullName: fullName.trim(),
+        title: title.trim(),
+        location: location.trim(),
         skills: skillsData,
         education,
-        bio,
-        experience
+        bio: bio.trim(),
+        experience: experience.trim()
       };
-
-      await updateUserProfile(user.uid, profileData);
+  
+      // Save profile
+      const result = await updateUserProfile(user.uid, profileData);
       
-      setSuccess(true);
-      setTimeout(() => {
-        setSuccess(false);
-      }, 3000);
+      if (result.success) {
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+        
+        // Optional: Update local state with the exact saved data
+        setFullName(result.fullName || '');
+        setTitle(result.title || '');
+        setLocation(result.location || '');
+        setSkills(Array.isArray(result.skills) ? result.skills.join(', ') : result.skills || '');
+        setEducation(result.education || '');
+        setBio(result.bio || '');
+        setExperience(result.experience || '');
+      }
     } catch (error) {
       console.error('Error saving profile:', error);
-      setError(error.message);
+      
+      // Handle guest account case specifically
+      if (error.message.includes('Guest')) {
+        setError("Please sign up for a full account to save profile changes");
+      } else {
+        setError(error.message || "Failed to save profile. Please try again.");
+      }
     } finally {
       setSaving(false);
+      
     }
   };
 

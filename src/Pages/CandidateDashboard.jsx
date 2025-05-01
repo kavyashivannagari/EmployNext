@@ -69,7 +69,7 @@ const CandidateDashboard = () => {
             fullName: "Guest Candidate",
             title: "Software Developer",
             location: "San Francisco, CA",
-            skills: "JavaScript, React, Node.js",
+            skills: ["JavaScript", "React", "Node.js"], // Changed to array
             education: "bachelors",
             bio: "Guest account for demo purposes",
             experience: "3 years of experience in web development",
@@ -81,7 +81,7 @@ const CandidateDashboard = () => {
             {
               id: 'demo1',
               status: 'pending',
-              appliedAt: { seconds: Date.now() / 1000 - 86400 }, // 1 day ago
+              appliedAt: { seconds: Date.now() / 1000 - 86400 },
               job: {
                 title: 'Frontend Developer',
                 company: 'Tech Corp',
@@ -94,7 +94,7 @@ const CandidateDashboard = () => {
             {
               id: 'demo2',
               status: 'interview',
-              appliedAt: { seconds: Date.now() / 1000 - 172800 }, // 2 days ago
+              appliedAt: { seconds: Date.now() / 1000 - 172800 },
               job: {
                 title: 'UI/UX Designer',
                 company: 'Design Studio',
@@ -220,11 +220,25 @@ const CandidateDashboard = () => {
                     <div>
                       <h3 className="text-sm font-semibold text-gray-500">Skills</h3>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {userProfile?.skills?.split(',').map((skill, index) => (
-                          <span key={index} className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs px-2 py-1 rounded">
-                            {skill.trim()}
-                          </span>
-                        )) || <span className="text-gray-500">No skills listed</span>}
+                        {userProfile?.skills ? (
+                          Array.isArray(userProfile.skills) ? (
+                            userProfile.skills.map((skill, index) => (
+                              <span key={index} className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs px-2 py-1 rounded">
+                                {skill.trim()}
+                              </span>
+                            ))
+                          ) : typeof userProfile.skills === 'string' ? (
+                            userProfile.skills.split(',').map((skill, index) => (
+                              <span key={index} className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs px-2 py-1 rounded">
+                                {skill.trim()}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-500">No skills listed</span>
+                          )
+                        ) : (
+                          <span className="text-gray-500">No skills listed</span>
+                        )}
                       </div>
                     </div>
                     
