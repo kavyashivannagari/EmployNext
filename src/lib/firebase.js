@@ -252,10 +252,14 @@ export const loginAsGuestCandidate = async () => {
 
 export const loginAsGuestRecruiter = async () => {
   try {
+    if (auth.currentUser) {
+      await signOut(auth);
+    }
+    
     const { user } = await signInAnonymously(auth);
+    
     sessionStorage.setItem('isGuest', 'recruiter');
     
-    // Create guest recruiter profile
     await setDoc(doc(db, "userProfiles", user.uid), {
       isGuest: true,
       fullName: "Guest Recruiter",
@@ -268,6 +272,7 @@ export const loginAsGuestRecruiter = async () => {
       createdAt: serverTimestamp()
     });
     
+    // Set user role
     await setDoc(doc(db, "users", user.uid), {
       role: "recruiter",
       isGuest: true,
@@ -280,6 +285,7 @@ export const loginAsGuestRecruiter = async () => {
     return user;
   } catch (error) {
     console.error("Guest recruiter login failed:", error);
+    sessionStorage.removeItem('isGuest');
     throw new Error("Unable to access guest account. Please try again later.");
   }
 };

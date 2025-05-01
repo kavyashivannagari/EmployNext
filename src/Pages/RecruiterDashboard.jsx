@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { auth, getUserProfile, getJobsByRecruiter, createUserProfile, deleteJob } from '../lib/firebase';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -13,7 +13,7 @@ import { X } from 'lucide-react';
 const JobItem = ({ job, onDelete, isGuest }) => {
   const postedDate = job.postedAt && new Date(job.postedAt.seconds * 1000).toLocaleDateString();
   const applicationsCount = job.applications?.length || 0;
-  
+
   return (
     <Card className="mb-4">
       <CardContent className="pt-6">
@@ -71,15 +71,17 @@ const RecruiterDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [alert, setAlert] = useState(null);
-  const location = useLocation();
   const navigate = useNavigate();
-  const isGuest = location.state?.isGuest || sessionStorage.getItem('isGuest') === 'recruiter';
+  
+  // Check sessionStorage for guest status
+  const isGuest = sessionStorage.getItem('isGuest') === 'recruiter';
 
   useEffect(() => {
     const loadUserData = async () => {
       try {
         if (isGuest) {
           // Load demo data for guest recruiters
+          console.log('Loading guest recruiter data');
           setUserProfile({
             fullName: "Guest Recruiter",
             companyName: "Demo Company",
@@ -118,8 +120,10 @@ const RecruiterDashboard = () => {
           return;
         }
         
+        // Regular user flow
         const user = auth.currentUser;
         if (!user) {
+          console.log('No user found, redirecting to login');
           navigate('/login');
           return;
         }
@@ -156,7 +160,7 @@ const RecruiterDashboard = () => {
     };
 
     loadUserData();
-  }, [location.key, isGuest, navigate]);
+  }, [isGuest, navigate]);
 
   const openPostJobModal = () => {
     if (isGuest) {
@@ -234,8 +238,7 @@ const RecruiterDashboard = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-     <Header user={auth.currentUser} userRole="recruiter" isGuest={isGuest} />
-
+      <Header user={auth.currentUser} userRole="recruiter" isGuest={isGuest} />
       
       <main className="flex-grow py-6 px-4 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto">

@@ -38,7 +38,6 @@ const handleGuestCandidate = async () => {
   try {
     setIsLoading(true);
     await loginAsGuestCandidate();
-    // Add a small delay to ensure sessionStorage is set before navigation
     setTimeout(() => {
       navigate('/candidate-dashboard', { replace: true });
     }, 300);
@@ -53,11 +52,13 @@ const handleGuestCandidate = async () => {
 const handleGuestRecruiter = async () => {
   try {
     setIsLoading(true);
+    // Clear any previous state
+    sessionStorage.removeItem('isGuest');
+    
+    // Perform guest login
     await loginAsGuestRecruiter();
-    setTimeout(() => {
-      console.log('Navigating to recruiter dashboard as guest');
-      navigate('/recruiter-dashboard', { replace: true });
-    }, 300);
+    navigate('/recruiter-dashboard')
+    window.location.href = '/recruiter-dashboard';
   } catch (error) {
     console.error('Guest recruiter login error:', error);
     alert(`Guest login failed: ${error.message}`);

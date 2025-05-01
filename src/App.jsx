@@ -31,29 +31,25 @@ function App() {
       if (user) {
         setUser(user);
         
-        // Check for guest status from sessionStorage
         const guestStatus = sessionStorage.getItem('isGuest');
         if (guestStatus) {
           setIsGuestUser(true);
           setGuestRole(guestStatus);
-          // Fix: Make sure userRole is properly set for guest users
-          setUserRole(guestStatus); // This ensures userRole is 'recruiter' or 'candidate'
+          setUserRole(guestStatus); // Explicitly set the role
         } else {
           try {
             const role = await getUserRole(user.uid);
-            setUserRole(role || 'candidate'); // Default to candidate if role is null
+            setUserRole(role || 'candidate');
             setIsGuestUser(false);
-            setGuestRole(null);
           } catch (error) {
             console.error("Error fetching user role:", error);
-            setUserRole('candidate'); // Fallback to candidate
+            setUserRole('candidate');
           }
         }
       } else {
         setUser(null);
         setUserRole(null);
         setIsGuestUser(false);
-        setGuestRole(null);
         sessionStorage.removeItem('isGuest');
       }
       setLoading(false);
@@ -126,13 +122,9 @@ function App() {
     {
       path: '/recruiter-dashboard',
       element: (
-        <RoleBasedRoute 
-          allowedRoles={['recruiter']} 
-          userRole={userRole}          
-          isGuest={isGuestUser}
-        >
-          <RecruiterDashboard isGuest={isGuestUser && userRole === 'recruiter'} />
-        </RoleBasedRoute>
+        <ProtectedRoute user={auth.currentUser || sessionStorage.getItem('isGuest') === 'recruiter'}>
+          <RecruiterDashboard isGuest={sessionStorage.getItem('isGuest') === 'recruiter'} />
+        </ProtectedRoute>
       ),
     },
     {
