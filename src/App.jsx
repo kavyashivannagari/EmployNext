@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import LandingPage from "./Pages/LandingPage";
 import CandidateDashboard from './Pages/CandidateDashboard';
 import CandidateProfile from './components/CandidateProfile';
-import RecruiterDashboard from './pages/RecruiterDashboard';
+import RecruiterDashboard from './Pages/RecruiterDashboard';
 import LoginPage from './pages/Login';
 import SignupPage from './pages/Signup';
 import ProtectedRoute from './components/ProtectedRoute';
