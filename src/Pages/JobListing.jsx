@@ -8,6 +8,7 @@ import {
   unsaveJob, 
   applyToJob, 
   getUserProfile, 
+  getUserRole,
   getUserApplications,
   cancelApplication,
   uploadResume
@@ -148,78 +149,118 @@ const JobListing = () => {
       });
     }
   };
-
-  const handleApplyClick = (jobId) => {
+  const handleApplyClick = async (jobId) => {
     if (!user) {
       navigate('/login', { state: { from: `/jobs` } });
       return;
     }
-    setSelectedJobId(jobId);
-    setApplyModalOpen(true);
-  };
+    
+    // Add role verification
+    try {
+      const role = await getUserRole(user.uid);
+      if (role !== 'candidate') {
+        setAlert({
+          type: 'error',
+          message: 'Only candidates can apply to jobs'
+        });
+        return;
+      }
+      
+      setSelectedJobId(jobId);
+      setApplyModalOpen(true);
+    } catch (error) {
+      setAlert({
+        type: 'error',
+        message: 'Failed to verify your account type'
+      });
+      console.log(error)
 
+    }
+  };
   const handleApplicationSubmit = async (resumeFile, coverLetter = '') => {
     try {
       setLoading(true);
+      setAlert(null); // Clear previous alerts
       
       if (!user) {
         navigate('/login');
         return;
       }
   
-      // Verify user profile
-      const profile = await getUserProfile(user.uid);
-      if (profile?.isGuest) {
-        throw new Error("Guest accounts cannot apply to jobs. Please sign up for a full account.");
+      // Verify candidate role first
+      try {
+        const role = await getUserRole(user.uid);
+        if (role !== 'candidate') {
+          throw new Error('Only candidates can apply to jobs');
+        }
+      } catch (roleError) {
+        setAlert({
+          type: 'error',
+          message: 'Failed to verify your candidate status. Please try again or contact support.'
+        });
+        return;
       }
   
       let resumeUrl = profile?.resumeUrl;
       
-      // Handle resume upload
+      // Upload new resume if provided
       if (resumeFile) {
         try {
           resumeUrl = await uploadResume(user.uid, resumeFile);
         } catch (uploadError) {
           console.error('Resume upload failed:', uploadError);
-          throw new Error('Failed to upload resume. Please try again.');
+          throw new Error('Failed to upload resume: ' + uploadError.message);
         }
       }
   
+      // Validate we have a resume URL
       if (!resumeUrl) {
         throw new Error('A resume is required to apply for this position');
       }
   
-      // Submit application
-      await applyToJob(user.uid, selectedJobId, {
+      // Prepare application data
+      const applicationData = {
         resumeUrl,
-        candidateName: profile?.fullName || user.displayName || 'Anonymous',
-        coverLetter
-      });
+        coverLetter,
+        candidateName: profile?.fullName || user.displayName || 'Applicant'
+      };
   
-      // Update UI
-      setAppliedJobIds(prev => ({ ...prev, [selectedJobId]: true }));
-      setAlert({ type: 'success', message: 'Application submitted successfully!' });
-      setApplyModalOpen(false);
+      // Submit application
+      const result = await applyToJob(user.uid, selectedJobId, applicationData);
       
-      // Update jobs list
+      // Update UI state
+      setAppliedJobIds(prev => ({ ...prev, [selectedJobId]: true }));
+      setAlert({ 
+        type: 'success', 
+        message: 'Application submitted successfully!' 
+      });
+      
+      // Refresh job data
       setJobs(jobs.map(job => 
         job.id === selectedJobId 
           ? { ...job, applicationCount: (job.applicationCount || 0) + 1 }
           : job
       ));
+      
+      setApplyModalOpen(false);
     } catch (error) {
-      console.error("Application error:", error);
+      console.error('Application failed:', error);
+      
+      let userMessage = error.message;
+      if (error.code === 'permission-denied') {
+        userMessage = 'Application failed: You do not have permission to apply. Please ensure you are logged in as a candidate.';
+      } else if (error.message.includes('already applied')) {
+        userMessage = 'You have already applied to this position.';
+      }
+      
       setAlert({
         type: 'error',
-        message: error.code === 'permission-denied'
-          ? 'You do not have permission to apply. Please ensure you have a candidate account.'
-          : error.message || 'Failed to submit application. Please try again.'
+        message: userMessage
       });
     } finally {
       setLoading(false);
     }
-  };
-  const handleCancelApplication = async (jobId) => {
+  };  const handleCancelApplication = async (jobId) => {
     try {
       const applicationId = applicationIds[jobId];
       if (!applicationId) {
@@ -290,11 +331,23 @@ const JobListing = () => {
       
       <main className="flex-grow py-6 px-4 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto">
-          {alert && (
-            <Alert variant={alert.type === 'error' ? 'destructive' : alert.type === 'warning' ? 'warning' : 'default'} className="mb-4">
-              <AlertDescription>{alert.message}</AlertDescription>
-            </Alert>
-          )}
+        {alert && (
+  <Alert 
+    variant={alert.type === 'error' ? 'destructive' : 'default'} 
+    className="mb-4"
+    onClose={() => setAlert(null)}
+  >
+    <AlertDescription className="flex items-center justify-between">
+      <span>{alert.message}</span>
+      <button 
+        onClick={() => setAlert(null)}
+        className="ml-4 hover:text-gray-700"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </AlertDescription>
+  </Alert>
+)}
           
           <div className="mb-6">
             <h1 className="text-2xl font-bold mb-4">Browse Jobs</h1>

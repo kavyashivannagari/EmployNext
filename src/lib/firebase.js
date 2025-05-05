@@ -173,7 +173,10 @@ export const registerWithEmailAndPasswordWithRole = async (name, email, password
 export const loginWithEmailAndPassword = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    return userCredential.user;
+    if (!userCredential || !userCredential.user) {
+      throw new Error("Authentication failed - no user received");
+    }
+    return userCredential; // Return the full credential object
   } catch (error) {
     console.error("Error in login:", error);
     throw error;
@@ -671,47 +674,133 @@ export const getUserApplications = async (userId) => {
 
 export const applyToJob = async (userId, jobId, applicationData = {}) => {
   try {
+    // 1. Verify authentication
     const user = checkUserAuth();
     if (user.uid !== userId) {
-      throw new Error("Authentication mismatch");
+      throw new Error("Authentication mismatch - you can only apply as yourself");
     }
 
-    // Check if user is guest
+    // 2. Check if user is guest
     const profile = await getUserProfile(userId);
-    if (profile.isGuest) {
+    if (profile?.isGuest) {
       throw new Error("Guest accounts cannot apply to jobs. Please sign up for a full account.");
     }
 
-    const applicationsRef = collection(db, "applications");
-    const q = query(applicationsRef, 
-      where("userId", "==", userId), 
+    // 3. Verify user role
+    const userRole = await getUserRole(userId);
+    if (userRole !== "candidate") {
+      throw new Error("Only candidates can apply to jobs");
+    }
+
+    // 4. Get the job document
+    const jobRef = doc(db, "jobs", jobId);
+    const jobSnap = await getDoc(jobRef);
+    
+    if (!jobSnap.exists()) {
+      throw new Error("Job not found or has been removed");
+    }
+
+    const jobData = jobSnap.data();
+    
+    // 5. Check if job is active
+    if (jobData.status !== "active") {
+      throw new Error("This job is no longer accepting applications");
+    }
+
+    // 6. Check if user already applied
+    const applicationsQuery = query(
+      collection(db, "applications"),
+      where("userId", "==", userId),
       where("jobId", "==", jobId)
     );
+    const querySnapshot = await getDocs(applicationsQuery);
     
-    const existingApplication = await getDocs(q);
-    if (!existingApplication.empty) {
+    if (!querySnapshot.empty) {
       throw new Error("You have already applied to this job");
     }
 
-    const applicationRef = await addDoc(collection(db, "applications"), {
+    // 7. Validate required application data
+    if (!applicationData.resumeUrl && !profile?.resumeUrl) {
+      throw new Error("A resume is required to apply for this job");
+    }
+
+    // 8. Prepare application data
+    const applicationPayload = {
       userId,
       jobId,
+      recruiterId: jobData.recruiterId,
       status: "pending",
       appliedAt: serverTimestamp(),
+      candidateName: applicationData.candidateName || profile?.fullName || user.displayName || "Applicant",
+      resumeUrl: applicationData.resumeUrl || profile?.resumeUrl || "",
+      coverLetter: applicationData.coverLetter || "",
       ...applicationData
-    });
+    };
 
-    const jobRef = doc(db, "jobs", jobId);
-    await updateDoc(jobRef, {
-      applicationCount: increment(1)
-    });
+    // 9. Create the application in a transaction
+    let applicationId;
+   // In your applyToJob function
+await runTransaction(db, async (transaction) => {
+  // Verify job still exists
+  const jobRef = doc(db, "jobs", jobId);
+  const jobSnap = await transaction.get(jobRef);
+  
+  if (!jobSnap.exists()) {
+    throw new Error("Job no longer exists");
+  }
 
-    return applicationRef.id;
+  // Validate recruiter ID exists
+  const recruiterRef = doc(db, "users", jobSnap.data().recruiterId);
+  const recruiterSnap = await transaction.get(recruiterRef);
+  if (!recruiterSnap.exists()) {
+    throw new Error("Recruiter account not found");
+  }
+
+  // Create application
+  const applicationRef = doc(collection(db, "applications"));
+  transaction.set(applicationRef, {
+    ...applicationPayload,
+    jobId,
+    recruiterId: jobSnap.data().recruiterId
+  });
+
+  // Update application count
+  transaction.update(jobRef, {
+    applicationCount: increment(1),
+    updatedAt: serverTimestamp()
+  });
+});
+
+    // 10. Return success
+    return {
+      id: applicationId,
+      ...applicationPayload,
+      jobTitle: jobData.title,
+      companyName: jobData.companyName
+    };
+
   } catch (error) {
-    console.error("Error applying to job:", error);
-    throw error;
+    console.error("Error applying to job:", {
+      error: error.message,
+      userId,
+      jobId,
+      applicationData
+    });
+
+    // Enhanced error messages
+    let userMessage = error.message;
+    if (error.code === 'permission-denied') {
+      userMessage = "You don't have permission to apply for this job. Please ensure you're signed in as a candidate.";
+    } else if (error.message.includes('already applied')) {
+      userMessage = "You've already applied to this position.";
+    } else if (error.message.includes('resume is required')) {
+      userMessage = "Please upload a resume before applying.";
+    }
+
+    throw new Error(userMessage);
   }
 };
+
 
 export const cancelApplication = async (applicationId) => {
   try {
