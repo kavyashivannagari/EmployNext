@@ -18,6 +18,8 @@ import MyJobs from './Pages/MyJob';
 import RecruiterProfile from './components/RecruiterProfile';
 import { Loader2 } from 'lucide-react';
 
+console.log("hi")
+
 function App() {
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
